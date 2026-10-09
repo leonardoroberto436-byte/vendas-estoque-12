@@ -23,14 +23,15 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 | `/produtos` | Catálogo CRUD (criar/editar/excluir, margem calculada) |
 | `/estoque` | Movimentações + entrada e ajuste manual |
 | `/alertas` | Produtos no/abaixo do estoque mínimo + botão Repor |
-| `/relatorio` | Relatório Mensal — fechamento com faturamento, lucro, top produtos, formas de pagamento, botão Imprimir |
+| `/relatorio` | Relatório Mensal — fechamento com faturamento, lucro, top produtos, formas de pagamento, botões **Imprimir** e **Excel** |
+| `/perfil` | Meu Perfil — dados da conta + troca da própria senha (qualquer usuário logado) |
 | `/admin` | Painel Administrativo (**só ADMIN**) — criar/ativar/desativar/excluir usuários, trocar perfil, redefinir senha |
 
 ## API (todas sob `/api`)
 Todas as rotas abaixo exigem sessão válida (401 sem cookie), exceto `/api/auth/login`.
 - `POST /api/auth/login` (pública) · `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password`
 - `GET/POST /api/users` · `PUT /api/users/{id}` · `PUT /api/users/{id}/password` · `DELETE /api/users/{id}` — **ADMIN only (403 para operador)**
-- `GET /api/reports/months` · `GET /api/reports/monthly?year=&month=`
+- `GET /api/reports/months` · `GET /api/reports/monthly?year=&month=` · `GET /api/reports/monthly.xlsx?year=&month=` (download de 4 abas: Resumo, Produtos, Pagamentos, Por dia — gerado com openpyxl)
 - `GET /api/products?search=&category=` · `GET /api/products/categories` · `GET /api/products/{id}`
 - `POST /api/products` (201, 409 em SKU duplicado) · `PUT /api/products/{id}` · `DELETE /api/products/{id}` (204)
 - `GET /api/sales` · `GET /api/sales/{id}` · `POST /api/sales` (201; 400 se estoque insuficiente)

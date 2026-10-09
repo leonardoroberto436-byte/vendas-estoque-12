@@ -2,9 +2,12 @@
 
 from calendar import monthrange
 from datetime import datetime, timezone
+from io import BytesIO
+from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Query
+from fastapi.responses import StreamingResponse
 
 from lib.db import db
 from models.inventory import (
@@ -146,4 +149,114 @@ async def monthly_report(
             )
             for pid, data in top
         ],
+    )
+
+
+@router.get("/monthly.xlsx")
+async def monthly_report_xlsx(
+    year: int | None = Query(default=None, ge=2000, le=2100),
+    month: int | None = Query(default=None, ge=1, le=12),
+):
+    """Same closing figures as /monthly, as a four-sheet .xlsx for the accountant."""
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    report = await monthly_report(year=year, month=month)
+
+    header_font = Font(bold=True, color="FFFFFF")
+    header_fill = PatternFill("solid", fgColor="0D9488")
+    title_font = Font(bold=True, size=14)
+    money = 'R$ #,##0.00'
+
+    wb = Workbook()
+
+    def style_header(ws, row: int, columns: int) -> None:
+        for col in range(1, columns + 1):
+            cell = ws.cell(row=row, column=col)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center")
+
+    def autosize(ws, widths: list[int]) -> None:
+        for index, width in enumerate(widths, start=1):
+            ws.column_dimensions[get_column_letter(index)].width = width
+
+    # --- Resumo
+    ws = wb.active
+    ws.title = "Resumo"
+    ws["A1"] = f"Estoque & Vendas Pro — Fechamento {report.label}"
+    ws["A1"].font = title_font
+    ws["A2"] = f"Emitido em {report.generated_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
+    rows = [
+        ("Faturamento", report.revenue, money),
+        ("Custo das vendas", report.cost, money),
+        ("Lucro", report.profit, money),
+        ("Margem (%)", report.margin_percent, "0.0"),
+        ("Descontos concedidos", report.discount_total, money),
+        ("Vendas realizadas", report.sales_count, "0"),
+        ("Itens vendidos", report.items_sold, "0"),
+        ("Ticket médio", report.average_ticket, money),
+        ("Melhor dia", report.best_day or "—", "General"),
+        ("Faturamento do melhor dia", report.best_day_revenue, money),
+    ]
+    ws["A4"] = "Indicador"
+    ws["B4"] = "Valor"
+    style_header(ws, 4, 2)
+    for offset, (label, value, fmt) in enumerate(rows, start=5):
+        ws.cell(row=offset, column=1, value=label)
+        cell = ws.cell(row=offset, column=2, value=value)
+        cell.number_format = fmt
+    autosize(ws, [30, 22])
+
+    # --- Produtos mais vendidos
+    ws = wb.create_sheet("Produtos")
+    ws.append(["#", "Produto", "Quantidade", "Faturamento"])
+    style_header(ws, 1, 4)
+    for index, item in enumerate(report.top_products, start=1):
+        ws.append([index, item.name, item.quantity, item.revenue])
+        ws.cell(row=index + 1, column=4).number_format = money
+    autosize(ws, [6, 40, 14, 18])
+
+    # --- Formas de pagamento
+    ws = wb.create_sheet("Pagamentos")
+    labels = {
+        "DINHEIRO": "Dinheiro",
+        "PIX": "PIX",
+        "CARTAO_DEBITO": "Cartão de Débito",
+        "CARTAO_CREDITO": "Cartão de Crédito",
+    }
+    ws.append(["Forma de pagamento", "Vendas", "Faturamento", "Participação (%)"])
+    style_header(ws, 1, 4)
+    for index, row in enumerate(report.payments, start=2):
+        ws.append(
+            [
+                labels.get(row.payment_method, row.payment_method),
+                row.sales_count,
+                row.revenue,
+                row.share_percent,
+            ]
+        )
+        ws.cell(row=index, column=3).number_format = money
+        ws.cell(row=index, column=4).number_format = "0.0"
+    autosize(ws, [24, 12, 18, 18])
+
+    # --- Faturamento por dia
+    ws = wb.create_sheet("Por dia")
+    ws.append(["Dia", "Vendas", "Faturamento", "Lucro"])
+    style_header(ws, 1, 4)
+    for index, point in enumerate(report.daily, start=2):
+        ws.append([point.day, point.sales_count, point.revenue, point.profit])
+        ws.cell(row=index, column=3).number_format = money
+        ws.cell(row=index, column=4).number_format = money
+    autosize(ws, [8, 12, 18, 18])
+
+    buffer = BytesIO()
+    wb.save(buffer)
+    buffer.seek(0)
+    filename = f"fechamento-{report.year}-{report.month:02d}.xlsx"
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
     )

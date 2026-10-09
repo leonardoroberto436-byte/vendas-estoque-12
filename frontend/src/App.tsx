@@ -8,6 +8,7 @@ import Alerts from "@/pages/Alerts";
 import MonthlyReportPage from "@/pages/MonthlyReport";
 import Login from "@/pages/Login";
 import Admin from "@/pages/Admin";
+import Profile from "@/pages/Profile";
 import RequireAuth from "@/components/RequireAuth";
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
@@ -68,6 +69,14 @@ export default function App() {
         element={
           <RequireAuth>
             <MonthlyReportPage />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/perfil"
+        element={
+          <RequireAuth>
+            <Profile />
           </RequireAuth>
         }
       />

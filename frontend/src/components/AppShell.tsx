@@ -63,12 +63,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <div className="flex items-center gap-2">
               {user && (
-                <div className="hidden text-right sm:block" data-testid="current-user-chip">
+                <NavLink
+                  to="/perfil"
+                  className="hidden rounded-lg px-2 py-1 text-right transition-colors duration-150 ease-out hover:bg-slate-100 sm:block"
+                  data-testid="current-user-chip"
+                  aria-label="Abrir meu perfil"
+                >
                   <p className="text-sm font-semibold leading-tight text-slate-900">{user.name}</p>
                   <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
                     {user.role === "ADMIN" ? "Administrador" : "Operador"}
                   </p>
-                </div>
+                </NavLink>
               )}
               <NavLink
                 to="/vender"

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Lock, Mail, Store } from "lucide-react";
+import { Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { apiPost } from "@/lib/api";
 import type { User } from "@/lib/types";
@@ -47,9 +47,12 @@ export default function Login() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-slate-100 px-5 py-10">
       <div className="w-full max-w-sm">
         <div className="mb-7 flex items-center gap-3">
-          <span className="flex size-12 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-sm">
-            <Store className="size-6" />
-          </span>
+          <img
+            src="https://static.prod-images.emergentagent.com/jobs/0650c3ab-c154-4e41-8d2f-4708ce09b71c/images/4b748034e25d61b318fe673c52bfc0f6958ce520707210eee529bb4bcccfc178.jpeg"
+            alt="Balcão de loja com painel de vendas e estoque organizado"
+            className="size-14 shrink-0 rounded-xl border border-slate-200 object-cover shadow-sm"
+            data-testid="login-brand-image"
+          />
           <div className="leading-tight">
             <p className="text-lg font-bold tracking-tight text-slate-900">
               Estoque &amp; Vendas Pro
@@ -58,7 +61,13 @@ export default function Login() {
           </div>
         </div>
 
-        <Card className="animate-rise-in border-slate-200 shadow-sm">
+        <Card className="animate-rise-in overflow-hidden border-slate-200 shadow-sm">
+          <img
+            src="https://static.prod-images.emergentagent.com/jobs/0650c3ab-c154-4e41-8d2f-4708ce09b71c/images/4b748034e25d61b318fe673c52bfc0f6958ce520707210eee529bb4bcccfc178.jpeg"
+            alt="Ilustração de controle de estoque e vendas de balcão"
+            className="h-40 w-full border-b border-slate-200 object-cover"
+            data-testid="login-hero-image"
+          />
           <CardContent className="p-6">
             <h1 className="text-xl font-bold tracking-tight text-slate-900">Entrar</h1>
             <p className="mt-1 text-sm text-slate-500">

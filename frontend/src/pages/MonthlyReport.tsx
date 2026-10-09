@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Printer } from "lucide-react";
+import { FileSpreadsheet, Printer } from "lucide-react";
 import {
   Bar,
   BarChart,
@@ -86,6 +86,18 @@ export default function MonthlyReportPage() {
               ))}
             </SelectContent>
           </Select>
+          <a
+            href={
+              year && month
+                ? `/api/reports/monthly.xlsx?year=${year}&month=${month}`
+                : "/api/reports/monthly.xlsx"
+            }
+            className="inline-flex items-center gap-2 rounded-lg border border-input bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition-colors duration-150 ease-out hover:bg-slate-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+            data-testid="report-export-xlsx-btn"
+          >
+            <FileSpreadsheet className="size-4" />
+            Excel
+          </a>
           <Button
             onClick={() => window.print()}
             data-testid="report-print-btn"

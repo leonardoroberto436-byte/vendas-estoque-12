@@ -23,6 +23,7 @@ from lib.auth import (
 )
 from lib.db import db
 from lib.email import send_password_reset, send_signup_pending
+from lib.subscriptions import days_until
 from models.org import (
     TRIAL_DAYS,
     ForgotPasswordRequest,
@@ -83,6 +84,8 @@ def _org_summary(org: dict | None) -> OrgSummary | None:
         subscription_status=org["subscription_status"],
         trial_ends_at=trial_ends,
         trial_days_left=days_left,
+        due_date=_aware(org.get("due_date")),
+        days_to_due=days_until(org.get("due_date")),
     )
 
 

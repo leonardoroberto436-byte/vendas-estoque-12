@@ -13,6 +13,7 @@ import { ForgotPassword, ResetPassword } from "@/pages/PasswordRecovery";
 import Admin from "@/pages/Admin";
 import Platform from "@/pages/Platform";
 import Profile from "@/pages/Profile";
+import Company from "@/pages/Company";
 import RequireAuth from "@/components/RequireAuth";
 
 /** Tenant-scoped page: any signed-in member of a company. */
@@ -42,6 +43,14 @@ export default function App() {
       <Route path="/perfil" element={<Shop><Profile /></Shop>} />
 
       {/* company admin only */}
+      <Route
+        path="/empresa"
+        element={
+          <RequireAuth adminOnly>
+            <Company />
+          </RequireAuth>
+        }
+      />
       <Route
         path="/admin"
         element={

@@ -10,7 +10,7 @@ from typing import List, Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
-Plan = Literal["TESTE", "BASICO", "PROFISSIONAL"]
+Plan = Literal["TESTE", "INICIAL", "PROFISSIONAL", "AVANCADO"]
 SubscriptionStatus = Literal["TESTE", "ATIVO", "INADIMPLENTE", "CANCELADO"]
 OrgStatus = Literal["PENDENTE", "APROVADA", "SUSPENSA"]
 
@@ -18,9 +18,22 @@ TRIAL_DAYS = 14
 
 PLAN_LABELS: dict[str, str] = {
     "TESTE": "Período de teste",
-    "BASICO": "Básico",
+    "INICIAL": "Inicial",
     "PROFISSIONAL": "Profissional",
+    "AVANCADO": "Avançado",
 }
+
+# Monthly price per plan (BRL). Editable by the platform owner at runtime;
+# this dict is only the fallback used before the first edit.
+DEFAULT_PLAN_PRICES: dict[str, float] = {
+    "TESTE": 0.0,
+    "INICIAL": 49.90,
+    "PROFISSIONAL": 79.90,
+    "AVANCADO": 129.90,
+}
+
+# Days before the due date that trigger a reminder e-mail (0 = on the day).
+REMINDER_DAYS = (7, 3, 1, 0)
 
 
 def _uid() -> str:
@@ -40,6 +53,8 @@ class Organization(BaseModel):
     plan: Plan = "TESTE"
     subscription_status: SubscriptionStatus = "TESTE"
     trial_ends_at: Optional[datetime] = None
+    due_date: Optional[datetime] = None
+    reminders_sent: List[str] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=_now)
     approved_at: Optional[datetime] = None
     suspended_at: Optional[datetime] = None
@@ -73,6 +88,8 @@ class OrgSummary(BaseModel):
     subscription_status: SubscriptionStatus
     trial_ends_at: Optional[datetime] = None
     trial_days_left: Optional[int] = None
+    due_date: Optional[datetime] = None
+    days_to_due: Optional[int] = None
 
 
 class PlatformOrgView(OrgSummary):
@@ -125,6 +142,35 @@ class OrgCredentials(BaseModel):
 class OrgPlanUpdate(BaseModel):
     plan: Plan
     subscription_status: SubscriptionStatus
+    # ISO date (YYYY-MM-DD) or null to clear. Set manually by the platform owner.
+    due_date: Optional[str] = None
+
+
+class PlanPrices(BaseModel):
+    """Monthly price per plan, in BRL."""
+
+    prices: dict[str, float]
+
+
+class PlanRevenue(BaseModel):
+    plan: Plan
+    plan_label: str
+    price: float
+    paying_orgs: int
+    total_orgs: int
+    monthly_revenue: float
+
+
+class PlatformRevenue(BaseModel):
+    """Recurring revenue snapshot. Counts only companies whose access is live
+    and whose subscription is being charged (ATIVO or INADIMPLENTE)."""
+
+    mrr: float
+    expected_mrr: float
+    overdue_amount: float
+    paying_orgs: int
+    trial_orgs: int
+    by_plan: List[PlanRevenue]
 
 
 class PlatformUserView(BaseModel):

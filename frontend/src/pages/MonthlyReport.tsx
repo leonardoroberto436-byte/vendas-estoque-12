@@ -11,8 +11,9 @@ import {
   YAxis,
 } from "recharts";
 import { apiGet } from "@/lib/api";
-import type { MonthlyReport, ReportMonth } from "@/lib/types";
+import type { MonthlyReport, OrgBranding, ReportMonth } from "@/lib/types";
 import { PAYMENT_LABELS, formatDateTime, money } from "@/lib/format";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,6 +37,13 @@ const keyOf = (month: ReportMonth) => `${month.year}-${String(month.month).padSt
 
 export default function MonthlyReportPage() {
   const [selected, setSelected] = useState("");
+
+  const { user } = useCurrentUser();
+  const { data: branding } = useQuery({
+    queryKey: ["branding"],
+    queryFn: () => apiGet<OrgBranding>("/settings/branding"),
+    refetchOnWindowFocus: false,
+  });
 
   const { data: monthData, isError: monthError } = useQuery({
     queryKey: ["report-months"],
@@ -111,9 +119,20 @@ export default function MonthlyReportPage() {
 
       <div id="report-sheet" className="space-y-6">
         <div className="hidden print:block">
+          {branding?.logo && (
+            <img src={branding.logo} alt="" className="mb-2 max-h-16 object-contain" />
+          )}
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            Estoque &amp; Vendas Pro — Fechamento {report?.label ?? ""}
+            {branding?.trade_name?.trim() || user?.organization?.name || "Estoque & Vendas Pro"} —
+            Fechamento {report?.label ?? ""}
           </h2>
+          {(branding?.cnpj?.trim() || branding?.phone?.trim() || branding?.address?.trim()) && (
+            <p className="text-xs text-slate-500">
+              {[branding?.cnpj && `CNPJ: ${branding.cnpj}`, branding?.address, branding?.phone]
+                .filter(Boolean)
+                .join(" · ")}
+            </p>
+          )}
           <p className="text-xs text-slate-500">
             Emitido em {report ? formatDateTime(report.generated_at) : ""}
           </p>

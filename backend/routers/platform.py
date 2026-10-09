@@ -17,7 +17,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from lib.auth import ROLE_ADMIN, hash_password, require
 from lib.db import db
 from lib.email import send_org_approved
+from lib.subscriptions import (
+    PAYING_STATUSES,
+    days_until,
+    get_plan_prices,
+    run_due_reminders,
+    set_plan_prices,
+)
 from models.org import (
+    DEFAULT_PLAN_PRICES,
     PLAN_LABELS,
     TRIAL_DAYS,
     OrgCreateRequest,
@@ -26,7 +34,10 @@ from models.org import (
     OrgStatusUpdate,
     OrgUpdateRequest,
     Organization,
+    PlanPrices,
+    PlanRevenue,
     PlatformOrgView,
+    PlatformRevenue,
     PlatformStats,
     PlatformUserView,
 )
@@ -63,6 +74,8 @@ async def _to_view(org: dict) -> PlatformOrgView:
         subscription_status=org["subscription_status"],
         trial_ends_at=trial_ends,
         trial_days_left=days_left,
+        due_date=_aware(org.get("due_date")),
+        days_to_due=days_until(org.get("due_date")),
         owner_name=org.get("owner_name", ""),
         owner_email=org.get("owner_email", ""),
         created_at=_aware(org["created_at"]),
@@ -315,7 +328,22 @@ async def set_org_plan(org_id: str, payload: OrgPlanUpdate):
     if not org:
         raise HTTPException(status_code=404, detail="Empresa não encontrada")
 
-    changes = {"plan": payload.plan, "subscription_status": payload.subscription_status}
+    changes: dict = {
+        "plan": payload.plan,
+        "subscription_status": payload.subscription_status,
+    }
+    if payload.due_date is None:
+        changes["due_date"] = None
+    else:
+        try:
+            # noon UTC keeps the date stable when read back in America/Sao_Paulo
+            changes["due_date"] = datetime.fromisoformat(payload.due_date).replace(
+                hour=12, minute=0, tzinfo=timezone.utc
+            )
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Data de vencimento inválida.")
+        # a new due date starts a fresh reminder cycle
+        changes["reminders_sent"] = []
     await db.organizations.update_one({"id": org_id}, {"$set": changes})
 
     if payload.subscription_status == "CANCELADO":
@@ -325,3 +353,67 @@ async def set_org_plan(org_id: str, payload: OrgPlanUpdate):
 
     updated = await db.organizations.find_one({"id": org_id})
     return await _to_view(updated)
+
+
+# --------------------------------------------------------------- revenue (MRR)
+@router.get("/plan-prices", response_model=PlanPrices)
+async def read_plan_prices():
+    return PlanPrices(prices=await get_plan_prices())
+
+
+@router.put("/plan-prices", response_model=PlanPrices)
+async def write_plan_prices(payload: PlanPrices):
+    unknown = set(payload.prices) - set(DEFAULT_PLAN_PRICES)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Plano desconhecido: {', '.join(unknown)}")
+    return PlanPrices(prices=await set_plan_prices(payload.prices))
+
+
+@router.get("/revenue", response_model=PlatformRevenue)
+async def platform_revenue():
+    """Recurring revenue: what is actually billable today versus what is late.
+
+    `mrr` counts only ATIVO companies. INADIMPLENTE companies still owe, so
+    their value lands in `overdue_amount`; `expected_mrr` is the two combined.
+    """
+    prices = await get_plan_prices()
+    orgs = await db.organizations.find({"status": "APROVADA"}).to_list(5000)
+
+    rows: list[PlanRevenue] = []
+    mrr = overdue = 0.0
+    paying = trials = 0
+    for plan, price in prices.items():
+        in_plan = [o for o in orgs if o.get("plan") == plan]
+        billable = [o for o in in_plan if o.get("subscription_status") in PAYING_STATUSES]
+        active = [o for o in billable if o.get("subscription_status") == "ATIVO"]
+        late = [o for o in billable if o.get("subscription_status") == "INADIMPLENTE"]
+        mrr += price * len(active)
+        overdue += price * len(late)
+        paying += len(billable)
+        if plan == "TESTE":
+            trials += len(in_plan)
+        rows.append(
+            PlanRevenue(
+                plan=plan,  # type: ignore[arg-type]
+                plan_label=PLAN_LABELS.get(plan, plan),
+                price=price,
+                paying_orgs=len(billable),
+                total_orgs=len(in_plan),
+                monthly_revenue=round(price * len(billable), 2),
+            )
+        )
+
+    return PlatformRevenue(
+        mrr=round(mrr, 2),
+        expected_mrr=round(mrr + overdue, 2),
+        overdue_amount=round(overdue, 2),
+        paying_orgs=paying,
+        trial_orgs=trials,
+        by_plan=rows,
+    )
+
+
+@router.post("/run-due-reminders")
+async def trigger_due_reminders():
+    """Manual trigger for the daily reminder job — same code path as the cron."""
+    return await run_due_reminders()

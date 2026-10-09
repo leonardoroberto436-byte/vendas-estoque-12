@@ -229,3 +229,44 @@ async def send_org_approved(*, to: str, name: str, company: str, trial_days: int
     return await send_email(
         to=to, subject=f"Acesso liberado — {EMAIL_FROM_NAME}", html=_wrap(body)
     )
+
+
+async def send_due_reminder(
+    *,
+    to: str,
+    name: str,
+    company: str,
+    days: int,
+    due_date: str,
+    amount: float,
+    plan_label: str,
+) -> str | None:
+    """Subscription due-date notice. Sent 7/3/1 days before and on the due date."""
+    when = (
+        "vence hoje"
+        if days == 0
+        else f"vence em {days} dia" + ("s" if days > 1 else "")
+    )
+    value = f"R$ {amount:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+    base = app_url()
+    cta = ""
+    if base:
+        cta = (
+            f'<p style="margin:28px 0"><a href="{base}/login" '
+            f'style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 22px;'
+            f'border-radius:8px;font-weight:bold;display:inline-block">Abrir o sistema</a></p>'
+        )
+    body = (
+        f"<p>Ol\u00e1 {escape(name)},</p>"
+        f"<p>A assinatura da empresa <strong>{escape(company)}</strong> no "
+        f"{escape(EMAIL_FROM_NAME)} <strong>{when}</strong> ({escape(due_date)}).</p>"
+        f"<p>Plano {escape(plan_label)} \u00b7 {escape(value)} por m\u00eas.</p>"
+        f"<p>Mantenha o pagamento em dia para continuar usando o sistema sem interrup\u00e7\u00e3o. "
+        f"Se j\u00e1 pagou, desconsidere este aviso.</p>{cta}"
+    )
+    subject = (
+        f"Assinatura vence hoje \u2014 {EMAIL_FROM_NAME}"
+        if days == 0
+        else f"Sua assinatura vence em {days} dia{'s' if days > 1 else ''} \u2014 {EMAIL_FROM_NAME}"
+    )
+    return await send_email(to=to, subject=subject, html=_wrap(body))

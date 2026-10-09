@@ -2,6 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeftRight,
+  Building2,
   FileBarChart,
   LayoutDashboard,
   LogOut,
@@ -127,6 +128,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </NavLink>
               );
             })}
+            {isAdmin && (
+              <NavLink
+                to="/empresa"
+                data-testid="nav-company"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out",
+                  location.pathname.startsWith("/empresa")
+                    ? "bg-slate-900 text-white"
+                    : "text-teal-700 hover:bg-teal-50",
+                )}
+              >
+                <Building2 className="size-4" />
+                Minha Empresa
+              </NavLink>
+            )}
             {isAdmin && (
               <NavLink
                 to="/admin"

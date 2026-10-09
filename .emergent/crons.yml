@@ -1,0 +1,9 @@
+crons:
+  - name: avisos-vencimento
+    description: "Envia aviso de vencimento da assinatura 7, 3 e 1 dia antes e no dia"
+    cron: "0 12 * * *"
+    timezone: "America/Sao_Paulo"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/cron/subscription-reminders"
+    method: POST
+    enabled: true

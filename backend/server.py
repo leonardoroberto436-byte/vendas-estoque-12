@@ -66,7 +66,9 @@ from lib.auth import ensure_bootstrap_accounts  # noqa: E402
 from routers import (  # noqa: E402
     auth,
     dashboard,
+    cron,
     platform,
+    settings as settings_router,
     products,
     reports,
     returns,
@@ -91,7 +93,11 @@ api_router.include_router(reports.router)
 api_router.include_router(users.router)
 
 # SaaS owner only (platform:manage) — the single cross-organization surface
+api_router.include_router(settings_router.router)
 api_router.include_router(platform.router)
+
+# Platform cron webhook (shared-secret auth, no session)
+api_router.include_router(cron.router)
 
 # Include the router in the main app
 app.include_router(api_router)

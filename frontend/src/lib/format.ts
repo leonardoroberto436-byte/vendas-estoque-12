@@ -1,6 +1,7 @@
 import { ApiError } from "@/lib/api";
 import type {
   MovementType,
+  OrgBranding,
   OrgStatus,
   PaymentMethod,
   Plan,
@@ -61,8 +62,9 @@ export const ORG_STATUS_CLASSES: Record<OrgStatus, string> = {
 
 export const PLAN_LABELS: Record<Plan, string> = {
   TESTE: "Período de teste",
-  BASICO: "Básico",
+  INICIAL: "Inicial",
   PROFISSIONAL: "Profissional",
+  AVANCADO: "Avançado",
 };
 
 export const SUBSCRIPTION_LABELS: Record<SubscriptionStatus, string> = {
@@ -80,9 +82,15 @@ export const SUBSCRIPTION_CLASSES: Record<SubscriptionStatus, string> = {
 };
 
 /** Plain-text receipt used for printing and for the WhatsApp message. */
-export function receiptText(sale: Sale, company: string): string {
+export function receiptText(sale: Sale, company: string, branding?: OrgBranding | null): string {
+  const header = [
+    `*${branding?.trade_name?.trim() || company}*`,
+    branding?.cnpj?.trim() ? `CNPJ: ${branding.cnpj}` : "",
+    branding?.address?.trim() ?? "",
+    branding?.phone?.trim() ? `Tel: ${branding.phone}` : "",
+  ].filter(Boolean);
   const lines = [
-    `*${company}*`,
+    ...header,
     `Cupom ${sale.code}`,
     formatDateTime(sale.created_at),
     `Vendedor: ${sale.seller_name || "-"}`,

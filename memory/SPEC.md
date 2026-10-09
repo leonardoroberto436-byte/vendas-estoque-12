@@ -19,7 +19,14 @@
 | `OPERADOR` | Tudo da loja, exceto gerenciar usuários. |
 
 ## Assinaturas (estrutura pronta, **sem cobrança real**)
-Planos: `TESTE` (14 dias) · `BASICO` · `PROFISSIONAL`. Status: `TESTE`, `ATIVO`, `INADIMPLENTE` (avisa e mantém acesso), `CANCELADO` (bloqueia login). A integração com provedor de pagamento será feita depois.
+Planos: `TESTE` (14 dias, R$ 0) · `INICIAL` (R$ 49,90) · `PROFISSIONAL` (R$ 79,90) · `AVANCADO` (R$ 129,90). Preços editáveis pelo dono em `/plataforma` (coleção `platform_settings`, doc `plans`). Status: `TESTE`, `ATIVO`, `INADIMPLENTE` (avisa e mantém acesso), `CANCELADO` (bloqueia login). A integração com provedor de pagamento será feita depois.
+
+**Receita**: `GET /api/platform/revenue` → `mrr` (só ATIVO), `overdue_amount` (INADIMPLENTE), `expected_mrr`, e quebra por plano. Só conta empresas APROVADAS.
+
+**Vencimento + avisos**: `organizations.due_date` (definido manualmente pelo dono, gravado às 12:00 UTC para não virar o dia em America/Sao_Paulo). O cron `.emergent/crons.yml` → `POST /api/cron/subscription-reminders` (Bearer `WEBHOOK_CRON_SECRET`, acka na hora e processa em background) roda 12:00 BRT todo dia e envia e-mail 7/3/1 dia antes e no dia, deduplicado por `reminders_sent: ["YYYY-MM-DD:dias"]`. Trocar a data zera o ciclo. Trigger manual: `POST /api/platform/run-due-reminders`.
+
+## Marca da empresa (cupom e relatório)
+`organizations.branding` = `{trade_name, cnpj, phone, address, logo}` (logo = data URL PNG/JPG, máx. 300 KB). `GET /api/settings/branding` (qualquer membro — o PDV precisa) · `PUT /api/settings/branding` (**só ADMIN**). Editado em `/empresa`, aplicado no cupom do PDV (tela, impressão 80mm e texto do WhatsApp) e no cabeçalho de impressão do relatório mensal.
 
 ## Migração executada
 `backend/migrate_tenancy.py` (dry-run por padrão, `--apply` executa): faz backup completo em `/app/backups/<timestamp>` (mongodump), cria/reutiliza a empresa dos dados legados ("Minha Loja", APROVADA/Profissional/ATIVO), preenche `org_id` retroativamente, remove o índice global de SKU e aplica o novo conjunto. Resultado da execução: 17 produtos, 17 vendas, 48 movimentações, 7 logs e 1 usuário migrados, **zero órfãos**.
@@ -48,6 +55,7 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 | `/cadastro` | Cadastro público de empresa (pública) |
 | `/esqueci-senha` · `/redefinir-senha` | Recuperação de senha por e-mail (pública) |
 | `/devolucoes` | Painel de Devoluções — estorno por item, repõe estoque, ajusta faturamento líquido |
+| `/empresa` | Minha Empresa (**só ADMIN**) — logo + nome fantasia, CNPJ, telefone e endereço do cupom/relatório |
 | `/plataforma` | Painel da Plataforma (**só PLATFORM_OWNER**) — KPIs, **Nova Empresa** (cria empresa + admin e mostra a senha gerada), editar dados, redefinir acesso do admin, liberar/suspender/reativar, plano e assinatura |
 | `/` | Visão Geral — KPIs do dia, seletor de **7/15/30 dias** (faturamento, devoluções, líquido, ticket médio), gráficos, **vendas por vendedor**, alertas |
 | `/vender` | Venda Balcão — carrinho, desconto, pagamento, finalizar; **cupom com vendedor e data, botão Imprimir (80mm) e Enviar no WhatsApp** |
@@ -63,7 +71,9 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 Todas as rotas abaixo exigem sessão válida (401 sem cookie), exceto `/api/auth/login`.
 - `POST /api/auth/signup` (pública) · `POST /api/auth/login` (pública) · `POST /api/auth/forgot-password` (pública) · `POST /api/auth/reset-password` (pública)
 - `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password`
-- `GET /api/platform/stats|organizations|users` · `POST /api/platform/organizations` (cria empresa APROVADA + usuário ADMIN, devolve a senha gerada uma única vez) · `PUT /api/platform/organizations/{id}` (nome/responsável/e-mail — o login do admin acompanha o e-mail) · `PUT /api/platform/organizations/{id}/status|plan` · `POST /api/platform/organizations/{id}/admin-password` (gera nova senha e derruba as sessões do admin) — **PLATFORM_OWNER only**
+- `GET /api/platform/stats|organizations|users` · `POST /api/platform/organizations` (cria empresa APROVADA + usuário ADMIN, devolve a senha gerada uma única vez) · `PUT /api/platform/organizations/{id}` (nome/responsável/e-mail — o login do admin acompanha o e-mail) · `PUT /api/platform/organizations/{id}/status|plan` · `POST /api/platform/organizations/{id}/admin-password` (gera nova senha e derruba as sessões do admin) · `GET /api/platform/revenue` · `GET|PUT /api/platform/plan-prices` · `POST /api/platform/run-due-reminders` — **PLATFORM_OWNER only**
+- `GET /api/settings/branding` (membro da empresa) · `PUT /api/settings/branding` (**ADMIN**)
+- `POST /api/cron/subscription-reminders` — webhook do cron, auth por `Authorization: Bearer $WEBHOOK_CRON_SECRET` (401 sem/errado)
 - `GET /api/returns` · `GET /api/returns/returnable` · `POST /api/returns`
 - `GET /api/dashboard/stats?days=7|15|30`
 - `GET/POST /api/users` · `PUT /api/users/{id}` · `PUT /api/users/{id}/password` · `DELETE /api/users/{id}` · `GET /api/users/access-logs` — **ADMIN only (403 para operador)**

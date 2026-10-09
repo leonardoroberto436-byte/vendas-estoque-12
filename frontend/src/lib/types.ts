@@ -2,7 +2,7 @@
 // Change one, change the other in the same edit.
 
 // ----------------------------------------------------------- organizations
-export type Plan = "TESTE" | "BASICO" | "PROFISSIONAL";
+export type Plan = "TESTE" | "INICIAL" | "PROFISSIONAL" | "AVANCADO";
 export type SubscriptionStatus = "TESTE" | "ATIVO" | "INADIMPLENTE" | "CANCELADO";
 export type OrgStatus = "PENDENTE" | "APROVADA" | "SUSPENSA";
 
@@ -15,6 +15,38 @@ export interface OrgSummary {
   subscription_status: SubscriptionStatus;
   trial_ends_at: string | null;
   trial_days_left: number | null;
+  due_date: string | null;
+  days_to_due: number | null;
+}
+
+export interface PlanPrices {
+  prices: Record<string, number>;
+}
+
+export interface PlanRevenue {
+  plan: Plan;
+  plan_label: string;
+  price: number;
+  paying_orgs: number;
+  total_orgs: number;
+  monthly_revenue: number;
+}
+
+export interface PlatformRevenue {
+  mrr: number;
+  expected_mrr: number;
+  overdue_amount: number;
+  paying_orgs: number;
+  trial_orgs: number;
+  by_plan: PlanRevenue[];
+}
+
+export interface OrgBranding {
+  trade_name: string;
+  cnpj: string;
+  phone: string;
+  address: string;
+  logo: string | null;
 }
 
 export interface PlatformOrgView extends OrgSummary {

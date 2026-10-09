@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, MessageCircle, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "@/lib/api";
-import type { PaymentMethod, Product, Sale, SaleCreate } from "@/lib/types";
+import type { OrgBranding, PaymentMethod, Product, Sale, SaleCreate } from "@/lib/types";
 import {
   PAYMENT_LABELS,
   errorMessage,
@@ -49,6 +49,12 @@ export default function PointOfSale() {
   const [phone, setPhone] = useState("");
   const { user } = useCurrentUser();
   const company = user?.organization?.name ?? "Estoque & Vendas Pro";
+  const { data: branding } = useQuery({
+    queryKey: ["branding"],
+    queryFn: () => apiGet<OrgBranding>("/settings/branding"),
+    refetchOnWindowFocus: false,
+  });
+  const headerName = branding?.trade_name?.trim() || company;
 
   const { data: products, isError } = useQuery({
     queryKey: ["products"],
@@ -394,9 +400,26 @@ export default function PointOfSale() {
               data-testid="pos-receipt-sheet"
             >
               <div className="text-center">
+                {branding?.logo && (
+                  <img
+                    src={branding.logo}
+                    alt=""
+                    className="mx-auto mb-2 max-h-16 object-contain"
+                    data-testid="receipt-logo"
+                  />
+                )}
                 <p className="text-base font-bold tracking-tight" data-testid="receipt-company">
-                  {company}
+                  {headerName}
                 </p>
+                {branding?.cnpj?.trim() && (
+                  <p className="text-xs" data-testid="receipt-cnpj">CNPJ: {branding.cnpj}</p>
+                )}
+                {branding?.address?.trim() && (
+                  <p className="text-xs" data-testid="receipt-address">{branding.address}</p>
+                )}
+                {branding?.phone?.trim() && (
+                  <p className="text-xs" data-testid="receipt-phone">Tel: {branding.phone}</p>
+                )}
                 <p className="text-xs" data-testid="receipt-code">
                   Cupom {receipt.code}
                 </p>
@@ -468,7 +491,7 @@ export default function PointOfSale() {
             </Button>
             {receipt && (
               <a
-                href={whatsappLink(receiptText(receipt, company), phone)}
+                href={whatsappLink(receiptText(receipt, company, branding), phone)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-150 ease-out hover:bg-emerald-700 active:scale-[0.98]"

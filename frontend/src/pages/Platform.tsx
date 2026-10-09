@@ -11,6 +11,9 @@ import {
   Pencil,
   Plus,
   RotateCcw,
+  Save,
+  Send,
+  TrendingUp,
   ShieldCheck,
   Users,
 } from "lucide-react";
@@ -18,6 +21,8 @@ import { toast } from "sonner";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import type {
   OrgCredentials,
+  PlanPrices,
+  PlatformRevenue,
   Plan,
   PlatformOrgView,
   PlatformStats,
@@ -43,6 +48,7 @@ import {
   SUBSCRIPTION_LABELS,
   errorMessage,
   formatDateTime,
+  money,
 } from "@/lib/format";
 import { endSession } from "@/lib/session";
 import { useCurrentUser } from "@/lib/useCurrentUser";
@@ -65,7 +71,9 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-const PLANS: Plan[] = ["TESTE", "BASICO", "PROFISSIONAL"];
+const isoDate = (value: string | null) => (value ? value.slice(0, 10) : null);
+
+const PLANS: Plan[] = ["TESTE", "INICIAL", "PROFISSIONAL", "AVANCADO"];
 const SUBSCRIPTIONS: SubscriptionStatus[] = ["TESTE", "ATIVO", "INADIMPLENTE", "CANCELADO"];
 
 const EMPTY_FORM = {
@@ -85,6 +93,7 @@ export default function Platform() {
   const [editing, setEditing] = useState<PlatformOrgView | null>(null);
   const [editForm, setEditForm] = useState({ name: "", owner_name: "", owner_email: "" });
   const [credentials, setCredentials] = useState<OrgCredentials | null>(null);
+  const [priceDraft, setPriceDraft] = useState<Record<string, string> | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ["platform-stats"],
@@ -94,6 +103,16 @@ export default function Platform() {
   const { data: orgData, isError: orgError } = useQuery({
     queryKey: ["platform-orgs"],
     queryFn: () => apiGet<PlatformOrgView[]>("/platform/organizations"),
+    refetchOnWindowFocus: false,
+  });
+  const { data: revenue } = useQuery({
+    queryKey: ["platform-revenue"],
+    queryFn: () => apiGet<PlatformRevenue>("/platform/revenue"),
+    refetchOnWindowFocus: false,
+  });
+  const { data: prices } = useQuery({
+    queryKey: ["platform-plan-prices"],
+    queryFn: () => apiGet<PlanPrices>("/platform/plan-prices"),
     refetchOnWindowFocus: false,
   });
   const { data: userData } = useQuery({
@@ -109,6 +128,7 @@ export default function Platform() {
     void queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-orgs"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-users"] });
+    void queryClient.invalidateQueries({ queryKey: ["platform-revenue"] });
   };
 
   const createOrg = useMutation({
@@ -157,6 +177,35 @@ export default function Platform() {
     onError: (error) => toast.error(errorMessage(error, "Não foi possível redefinir o acesso")),
   });
 
+  const savePrices = useMutation({
+    mutationFn: (draft: Record<string, string>) =>
+      apiPut<PlanPrices>("/platform/plan-prices", {
+        prices: Object.fromEntries(
+          Object.entries(draft).map(([plan, value]) => [
+            plan,
+            Number(value.replace(",", ".")) || 0,
+          ]),
+        ),
+      }),
+    onSuccess: () => {
+      setPriceDraft(null);
+      toast.success("Preços dos planos atualizados");
+      void queryClient.invalidateQueries({ queryKey: ["platform-plan-prices"] });
+      void queryClient.invalidateQueries({ queryKey: ["platform-revenue"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar os preços")),
+  });
+
+  const sendReminders = useMutation({
+    mutationFn: () =>
+      apiPost<{ sent: number; skipped: number; checked: number }>("/platform/run-due-reminders"),
+    onSuccess: (result) =>
+      toast.success(
+        `${result.sent} aviso(s) enviado(s) · ${result.skipped} já avisado(s) · ${result.checked} empresa(s) verificada(s)`,
+      ),
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível enviar os avisos")),
+  });
+
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
       apiPut<PlatformOrgView>(`/platform/organizations/${id}/status`, { status }),
@@ -172,11 +221,18 @@ export default function Platform() {
       id,
       plan,
       subscription_status,
+      due_date,
     }: {
       id: string;
       plan: Plan;
       subscription_status: SubscriptionStatus;
-    }) => apiPut<PlatformOrgView>(`/platform/organizations/${id}/plan`, { plan, subscription_status }),
+      due_date: string | null;
+    }) =>
+      apiPut<PlatformOrgView>(`/platform/organizations/${id}/plan`, {
+        plan,
+        subscription_status,
+        due_date,
+      }),
     onSuccess: (org) => {
       toast.success(`${org.name}: ${PLAN_LABELS[org.plan]} / ${SUBSCRIPTION_LABELS[org.subscription_status]}`);
       refresh();
@@ -253,6 +309,169 @@ export default function Platform() {
           ))}
         </div>
 
+        <Card className="mb-6 border-white/10 bg-slate-900 shadow-none">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-white">
+              <TrendingUp className="size-4 text-teal-400" />
+              Receita da plataforma
+            </CardTitle>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                data-testid="platform-send-reminders-button"
+                disabled={sendReminders.isPending}
+                onClick={() => sendReminders.mutate()}
+              >
+                <Send className="size-4" />
+                Enviar avisos de vencimento
+              </Button>
+              {priceDraft ? (
+                <Button
+                  size="sm"
+                  data-testid="platform-save-prices-button"
+                  disabled={savePrices.isPending}
+                  onClick={() => savePrices.mutate(priceDraft)}
+                >
+                  <Save className="size-4" />
+                  Salvar preços
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                  data-testid="platform-edit-prices-button"
+                  onClick={() =>
+                    setPriceDraft(
+                      Object.fromEntries(
+                        PLANS.map((plan) => [
+                          plan,
+                          String(prices?.prices?.[plan] ?? 0),
+                        ]),
+                      ),
+                    )
+                  }
+                >
+                  <Pencil className="size-4" />
+                  Editar preços
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Receita recorrente (MRR)
+                </p>
+                <p
+                  className="mt-1 font-mono text-2xl font-semibold tabular-nums text-teal-400"
+                  data-testid="platform-mrr"
+                >
+                  {money(revenue?.mrr ?? 0)}
+                </p>
+                <p className="text-[11px] text-slate-500">só assinaturas ativas</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Em atraso
+                </p>
+                <p
+                  className="mt-1 font-mono text-2xl font-semibold tabular-nums text-amber-400"
+                  data-testid="platform-overdue"
+                >
+                  {money(revenue?.overdue_amount ?? 0)}
+                </p>
+                <p className="text-[11px] text-slate-500">inadimplentes</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Potencial total
+                </p>
+                <p
+                  className="mt-1 font-mono text-2xl font-semibold tabular-nums text-white"
+                  data-testid="platform-expected-mrr"
+                >
+                  {money(revenue?.expected_mrr ?? 0)}
+                </p>
+                <p className="text-[11px] text-slate-500">ativos + inadimplentes</p>
+              </div>
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Pagantes / em teste
+                </p>
+                <p
+                  className="mt-1 font-mono text-2xl font-semibold tabular-nums text-white"
+                  data-testid="platform-paying-orgs"
+                >
+                  {revenue?.paying_orgs ?? 0} / {revenue?.trial_orgs ?? 0}
+                </p>
+                <p className="text-[11px] text-slate-500">empresas</p>
+              </div>
+            </div>
+
+            <div className="mt-6 overflow-x-auto">
+              <Table data-testid="platform-revenue-table">
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="text-slate-400">Plano</TableHead>
+                    <TableHead className="text-slate-400">Preço / mês</TableHead>
+                    <TableHead className="text-right text-slate-400">Empresas</TableHead>
+                    <TableHead className="text-right text-slate-400">Pagantes</TableHead>
+                    <TableHead className="text-right text-slate-400">Receita / mês</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {(revenue?.by_plan ?? []).map((row) => (
+                    <TableRow
+                      key={row.plan}
+                      className="border-white/10 hover:bg-white/5"
+                      data-testid={`platform-revenue-row-${row.plan}`}
+                    >
+                      <TableCell className="font-semibold text-white">{row.plan_label}</TableCell>
+                      <TableCell>
+                        {priceDraft ? (
+                          <Input
+                            inputMode="decimal"
+                            className="w-28 border-white/20 bg-slate-800 text-white"
+                            data-testid={`platform-price-input-${row.plan}`}
+                            value={priceDraft[row.plan] ?? ""}
+                            onChange={(event) =>
+                              setPriceDraft({ ...priceDraft, [row.plan]: event.target.value })
+                            }
+                          />
+                        ) : (
+                          <span className="font-mono tabular-nums text-slate-200">
+                            {money(row.price)}
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums text-slate-300">
+                        {row.total_orgs}
+                      </TableCell>
+                      <TableCell className="text-right font-mono tabular-nums text-slate-300">
+                        {row.paying_orgs}
+                      </TableCell>
+                      <TableCell
+                        className="text-right font-mono font-semibold tabular-nums text-white"
+                        data-testid={`platform-revenue-value-${row.plan}`}
+                      >
+                        {money(row.monthly_revenue)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="mt-4 text-xs text-slate-500">
+              Avisos de vencimento vão automaticamente para o e-mail do responsável 7, 3 e 1 dia
+              antes e no dia do vencimento. Defina a data na coluna “Vencimento” abaixo.
+            </p>
+          </CardContent>
+        </Card>
+
         <Card className="border-white/10 bg-slate-900 shadow-none">
           <CardHeader className="flex flex-row items-center justify-between gap-4">
             <CardTitle className="text-base font-bold tracking-tight text-white">
@@ -279,6 +498,7 @@ export default function Platform() {
                     <TableHead className="text-slate-400">Situação</TableHead>
                     <TableHead className="text-slate-400">Plano</TableHead>
                     <TableHead className="text-slate-400">Assinatura</TableHead>
+                    <TableHead className="text-slate-400">Vencimento</TableHead>
                     <TableHead className="text-slate-400">Cadastro</TableHead>
                     <TableHead className="text-right text-slate-400">Uso</TableHead>
                     <TableHead className="text-right text-slate-400">Ações</TableHead>
@@ -313,6 +533,7 @@ export default function Platform() {
                               id: org.id,
                               plan: value as Plan,
                               subscription_status: org.subscription_status,
+                              due_date: isoDate(org.due_date),
                             })
                           }
                         >
@@ -345,6 +566,7 @@ export default function Platform() {
                               id: org.id,
                               plan: org.plan,
                               subscription_status: value as SubscriptionStatus,
+                              due_date: isoDate(org.due_date),
                             })
                           }
                         >
@@ -365,6 +587,34 @@ export default function Platform() {
                             ))}
                           </SelectContent>
                         </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="date"
+                          className="w-[150px] border-white/20 bg-slate-800 text-white"
+                          data-testid={`platform-org-due-date-input-${org.id}`}
+                          defaultValue={isoDate(org.due_date) ?? ""}
+                          onChange={(event) =>
+                            setPlan.mutate({
+                              id: org.id,
+                              plan: org.plan,
+                              subscription_status: org.subscription_status,
+                              due_date: event.target.value || null,
+                            })
+                          }
+                        />
+                        {org.days_to_due !== null && (
+                          <p
+                            className={`mt-1 text-[11px] ${org.days_to_due < 0 ? "text-red-400" : org.days_to_due <= 7 ? "text-amber-400" : "text-slate-400"}`}
+                            data-testid={`platform-org-due-days-${org.id}`}
+                          >
+                            {org.days_to_due < 0
+                              ? `${Math.abs(org.days_to_due)} dia(s) em atraso`
+                              : org.days_to_due === 0
+                                ? "vence hoje"
+                                : `vence em ${org.days_to_due} dia(s)`}
+                          </p>
+                        )}
                       </TableCell>
                       <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-slate-400">
                         {formatDateTime(org.created_at)}
@@ -439,7 +689,7 @@ export default function Platform() {
                   ))}
                   {orgs.length === 0 && (
                     <TableRow className="border-white/10">
-                      <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-400">
+                      <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-400">
                         Nenhuma empresa cadastrada ainda.
                       </TableCell>
                     </TableRow>

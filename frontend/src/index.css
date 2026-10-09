@@ -148,3 +148,20 @@
     @apply font-sans;
     }
 }
+
+@media print {
+    @page { margin: 14mm; }
+    html, body {
+        background: #ffffff;
+    }
+    main {
+        padding: 0 !important;
+        max-width: none !important;
+    }
+    [data-sonner-toaster] {
+        display: none !important;
+    }
+    .break-inside-avoid {
+        break-inside: avoid;
+    }
+}

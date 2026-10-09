@@ -2,9 +2,12 @@ import { NavLink, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeftRight,
+  FileBarChart,
   LayoutDashboard,
+  LogOut,
   Package,
   Receipt,
+  ShieldCheck,
   ShoppingCart,
   Store,
 } from "lucide-react";
@@ -12,7 +15,10 @@ import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
 import type { DashboardStats } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { endSession } from "@/lib/session";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Toaster } from "@/components/ui/sonner";
+import { Button } from "@/components/ui/button";
 
 const NAV = [
   { to: "/", label: "Visão Geral", icon: LayoutDashboard, testId: "nav-dashboard" },
@@ -21,10 +27,12 @@ const NAV = [
   { to: "/produtos", label: "Produtos", icon: Package, testId: "nav-products" },
   { to: "/estoque", label: "Movimentações", icon: ArrowLeftRight, testId: "nav-stock" },
   { to: "/alertas", label: "Alertas", icon: AlertTriangle, testId: "nav-alerts" },
+  { to: "/relatorio", label: "Relatório Mensal", icon: FileBarChart, testId: "nav-report" },
 ];
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const location = useLocation();
+  const { user, isAdmin } = useCurrentUser();
   const { data: stats, isError } = useQuery({
     queryKey: ["dashboard-stats"],
     queryFn: () => apiGet<DashboardStats>("/dashboard/stats"),
@@ -34,7 +42,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-background">
-      <header className="sticky top-0 z-30 border-b border-border bg-white/85 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-border bg-white/85 backdrop-blur-md print:hidden">
         <div className="mx-auto flex max-w-[1400px] flex-col gap-3 px-5 py-3 lg:px-8">
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3">
@@ -53,14 +61,33 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </p>
               </div>
             </div>
-            <NavLink
-              to="/vender"
-              data-testid="btn-quick-new-sale"
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-150 ease-out hover:bg-teal-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
-            >
-              <ShoppingCart className="size-4" />
-              Nova Venda
-            </NavLink>
+            <div className="flex items-center gap-2">
+              {user && (
+                <div className="hidden text-right sm:block" data-testid="current-user-chip">
+                  <p className="text-sm font-semibold leading-tight text-slate-900">{user.name}</p>
+                  <p className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                    {user.role === "ADMIN" ? "Administrador" : "Operador"}
+                  </p>
+                </div>
+              )}
+              <NavLink
+                to="/vender"
+                data-testid="btn-quick-new-sale"
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground shadow-sm transition-colors duration-150 ease-out hover:bg-teal-700 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              >
+                <ShoppingCart className="size-4" />
+                Nova Venda
+              </NavLink>
+              <Button
+                variant="outline"
+                size="icon"
+                aria-label="Sair da conta"
+                data-testid="logout-button"
+                onClick={() => void endSession()}
+              >
+                <LogOut className="size-4" />
+              </Button>
+            </div>
           </div>
 
           <nav className="-mx-1 flex items-center gap-1 overflow-x-auto pb-1">
@@ -92,6 +119,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </NavLink>
               );
             })}
+            {isAdmin && (
+              <NavLink
+                to="/admin"
+                data-testid="nav-admin"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out",
+                  location.pathname.startsWith("/admin")
+                    ? "bg-slate-900 text-white"
+                    : "text-teal-700 hover:bg-teal-50",
+                )}
+              >
+                <ShieldCheck className="size-4" />
+                Painel Admin
+              </NavLink>
+            )}
           </nav>
         </div>
       </header>

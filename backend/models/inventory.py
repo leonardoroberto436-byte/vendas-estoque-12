@@ -137,6 +137,46 @@ class TopProduct(BaseModel):
     revenue: float
 
 
+class ReportMonth(BaseModel):
+    year: int
+    month: int
+    label: str
+
+
+class ReportDayPoint(BaseModel):
+    day: int
+    revenue: float
+    profit: float
+    sales_count: int
+
+
+class PaymentBreakdown(BaseModel):
+    payment_method: str
+    revenue: float
+    sales_count: int
+    share_percent: float
+
+
+class MonthlyReport(BaseModel):
+    year: int
+    month: int
+    label: str
+    generated_at: datetime
+    sales_count: int
+    items_sold: int
+    revenue: float
+    cost: float
+    profit: float
+    discount_total: float
+    margin_percent: float
+    average_ticket: float
+    best_day: Optional[int] = None
+    best_day_revenue: float
+    daily: List[ReportDayPoint]
+    payments: List[PaymentBreakdown]
+    top_products: List[TopProduct]
+
+
 class DashboardStats(BaseModel):
     today: str
     today_sales_count: int

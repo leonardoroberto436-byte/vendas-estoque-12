@@ -23,6 +23,7 @@ from lib.db import client, db, ensure_indexes
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.index_task = asyncio.create_task(ensure_indexes())  # background: a big index build must not block boot
+    await ensure_bootstrap_admin()
     yield
     client.close()
 
@@ -61,12 +62,22 @@ async def get_status_checks():
     return [StatusCheck(**status_check) for status_check in status_checks]
 
 # Feature routers — each exposes its own APIRouter, folded into /api here
-from routers import dashboard, products, sales, stock  # noqa: E402
+from fastapi import Depends  # noqa: E402
 
-api_router.include_router(products.router)
-api_router.include_router(sales.router)
-api_router.include_router(stock.router)
-api_router.include_router(dashboard.router)
+from lib.auth import ensure_bootstrap_admin, get_current_user, require  # noqa: E402
+from routers import auth, dashboard, products, reports, sales, stock, users  # noqa: E402
+
+# Public: login/logout/me handle their own session checks
+api_router.include_router(auth.router)
+
+# Everything below needs a valid session; users/* additionally needs users:manage
+_signed_in = [Depends(get_current_user)]
+api_router.include_router(products.router, dependencies=_signed_in)
+api_router.include_router(sales.router, dependencies=[Depends(require("sales:create"))])
+api_router.include_router(stock.router, dependencies=_signed_in)
+api_router.include_router(dashboard.router, dependencies=_signed_in)
+api_router.include_router(reports.router, dependencies=[Depends(require("reports:read"))])
+api_router.include_router(users.router)
 
 # Include the router in the main app
 app.include_router(api_router)

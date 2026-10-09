@@ -1,6 +1,32 @@
 // Hand-written mirrors of the Pydantic models in backend/models/inventory.py.
 // Change one, change the other in the same edit.
 
+export type Role = "ADMIN" | "OPERADOR";
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface UserCreate {
+  name: string;
+  email: string;
+  password: string;
+  role: Role;
+  is_active: boolean;
+}
+
+export interface UserUpdate {
+  name?: string;
+  role?: Role;
+  is_active?: boolean;
+}
+
 export type MovementType =
   | "ENTRADA"
   | "VENDA"
@@ -113,6 +139,46 @@ export interface TopProduct {
   name: string;
   quantity: number;
   revenue: number;
+}
+
+export interface ReportMonth {
+  year: number;
+  month: number;
+  label: string;
+}
+
+export interface ReportDayPoint {
+  day: number;
+  revenue: number;
+  profit: number;
+  sales_count: number;
+}
+
+export interface PaymentBreakdown {
+  payment_method: PaymentMethod;
+  revenue: number;
+  sales_count: number;
+  share_percent: number;
+}
+
+export interface MonthlyReport {
+  year: number;
+  month: number;
+  label: string;
+  generated_at: string;
+  sales_count: number;
+  items_sold: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  discount_total: number;
+  margin_percent: number;
+  average_ticket: number;
+  best_day: number | null;
+  best_day_revenue: number;
+  daily: ReportDayPoint[];
+  payments: PaymentBreakdown[];
+  top_products: TopProduct[];
 }
 
 export interface DashboardStats {

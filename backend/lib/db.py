@@ -44,6 +44,11 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("user_id", ASCENDING)], name="user_id"),
         IndexModel([("expires_at", ASCENDING)], name="expires_ttl", expireAfterSeconds=0),
     ],
+    "access_logs": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("created_at", DESCENDING)], name="created_desc"),
+        IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)], name="user_created"),
+    ],
 }
 
 

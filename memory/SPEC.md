@@ -30,7 +30,7 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 ## API (todas sob `/api`)
 Todas as rotas abaixo exigem sessão válida (401 sem cookie), exceto `/api/auth/login`.
 - `POST /api/auth/login` (pública) · `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password`
-- `GET/POST /api/users` · `PUT /api/users/{id}` · `PUT /api/users/{id}/password` · `DELETE /api/users/{id}` — **ADMIN only (403 para operador)**
+- `GET/POST /api/users` · `PUT /api/users/{id}` · `PUT /api/users/{id}/password` · `DELETE /api/users/{id}` · `GET /api/users/access-logs` — **ADMIN only (403 para operador)**
 - `GET /api/reports/months` · `GET /api/reports/monthly?year=&month=` · `GET /api/reports/monthly.xlsx?year=&month=` (download de 4 abas: Resumo, Produtos, Pagamentos, Por dia — gerado com openpyxl)
 - `GET /api/products?search=&category=` · `GET /api/products/categories` · `GET /api/products/{id}`
 - `POST /api/products` (201, 409 em SKU duplicado) · `PUT /api/products/{id}` · `DELETE /api/products/{id}` (204)
@@ -44,6 +44,7 @@ Todas as rotas abaixo exigem sessão válida (401 sem cookie), exceto `/api/auth
 - **stock_movements**: id, product_id, product_name, sku, type (ENTRADA|VENDA|AJUSTE_POSITIVO|AJUSTE_NEGATIVO|PERDA), quantity, delta, stock_after, reason, sale_id, created_at
 - **users**: id, name, email (único), role (ADMIN|OPERADOR), is_active, password_hash, created_at, last_login_at
 - **sessions**: id, token (único), user_id, created_at, expires_at (índice TTL)
+- **access_logs**: id, user_id, user_name, email, role, event (LOGIN_OK|LOGIN_FALHOU|LOGIN_BLOQUEADO|LOGOUT), ip, user_agent, created_at — append-only, exibido em `/admin`
 
 ## Regras de negócio
 - Finalizar venda decrementa o estoque por item com guarda `current_stock >= quantity`; qualquer falha faz rollback do que já baixou.

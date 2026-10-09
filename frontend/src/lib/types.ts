@@ -27,6 +27,18 @@ export interface UserUpdate {
   is_active?: boolean;
 }
 
+export interface AccessLog {
+  id: string;
+  user_id: string | null;
+  user_name: string;
+  email: string;
+  role: Role | null;
+  event: "LOGIN_OK" | "LOGIN_FALHOU" | "LOGIN_BLOQUEADO" | "LOGOUT";
+  ip: string;
+  user_agent: string;
+  created_at: string;
+}
+
 export type MovementType =
   | "ENTRADA"
   | "VENDA"

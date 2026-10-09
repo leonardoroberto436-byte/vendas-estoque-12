@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from lib.auth import Principal, hash_password, require
 from lib.db import db
-from models.users import PasswordReset, User, UserCreate, UserUpdate
+from models.users import AccessLog, PasswordReset, User, UserCreate, UserUpdate
 
 router = APIRouter(
     prefix="/users",
@@ -47,6 +47,13 @@ async def _admin_count() -> int:
 async def list_users():
     docs = await db.users.find().sort("created_at", 1).to_list(500)
     return [_to_model(doc) for doc in docs]
+
+
+@router.get("/access-logs", response_model=List[AccessLog])
+async def access_logs(limit: int = 200):
+    """Login/logout trail — newest first. Declared before /{user_id} routes."""
+    docs = await db.access_logs.find().sort("created_at", -1).to_list(min(limit, 500))
+    return [AccessLog(**{**doc, "created_at": _aware(doc["created_at"])}) for doc in docs]
 
 
 @router.post("", response_model=User, status_code=201)

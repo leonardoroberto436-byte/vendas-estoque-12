@@ -45,3 +45,15 @@ class PasswordReset(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str = Field(min_length=1)
     new_password: str = Field(min_length=8, max_length=128)
+
+
+class AccessLog(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: Optional[str] = None
+    user_name: str
+    email: str
+    role: Optional[Role] = None
+    event: Literal["LOGIN_OK", "LOGIN_FALHOU", "LOGIN_BLOQUEADO", "LOGOUT"]
+    ip: str = ""
+    user_agent: str = ""
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

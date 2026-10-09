@@ -7,6 +7,7 @@ import type { Role, User, UserCreate } from "@/lib/types";
 import { errorMessage, formatDateTime } from "@/lib/format";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
+import AccessLogTable from "@/components/AccessLogTable";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -252,9 +253,10 @@ export default function Admin() {
         </CardContent>
       </Card>
 
+      <AccessLogTable />
+
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent data-testid="user-create-modal">
-          <DialogHeader>
+        <DialogContent data-testid="user-create-modal">          <DialogHeader>
             <DialogTitle>Liberar novo acesso</DialogTitle>
             <DialogDescription>
               A conta já entra liberada (ou crie bloqueada e libere depois).

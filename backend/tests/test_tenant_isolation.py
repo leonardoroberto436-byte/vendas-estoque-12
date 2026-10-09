@@ -18,7 +18,11 @@ from contextlib import contextmanager
 import httpx
 import pytest
 
-API_URL = os.environ.get("BACKEND_URL", "http://localhost:8001") + "/api"
+# Session cookies are Secure, so the suite must talk HTTPS (the public URL) —
+# over plain http the cookie is never stored and every call would be a 401.
+API_URL = os.environ.get(
+    "BACKEND_URL", "https://vendas-estoque-12.preview.emergentagent.com"
+) + "/api"
 
 PLATFORM_EMAIL = os.environ.get(
     "PLATFORM_OWNER_EMAIL", "leonardoroberto436+plataforma@gmail.com"
@@ -516,7 +520,7 @@ def test_cancelled_subscription_blocks_access():
     with _session(PLATFORM_EMAIL, PLATFORM_PASSWORD) as owner:
         resp = owner.put(
             f"/platform/organizations/{victim['org_id']}/plan",
-            json={"plan": "BASICO", "subscription_status": "CANCELADO"},
+            json={"plan": "INICIAL", "subscription_status": "CANCELADO"},
         )
         assert resp.status_code == 200
 
@@ -531,7 +535,7 @@ def test_overdue_subscription_still_allows_access():
     with _session(PLATFORM_EMAIL, PLATFORM_PASSWORD) as owner:
         owner.put(
             f"/platform/organizations/{org['org_id']}/plan",
-            json={"plan": "BASICO", "subscription_status": "INADIMPLENTE"},
+            json={"plan": "INICIAL", "subscription_status": "INADIMPLENTE"},
         )
     with _session(org["email"], PASSWORD) as session:
         assert session.get("/products").status_code == 200

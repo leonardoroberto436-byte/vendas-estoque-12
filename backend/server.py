@@ -49,18 +49,6 @@ class StatusCheckCreate(BaseModel):
 async def root():
     return {"message": "Hello World"}
 
-@api_router.post("/status", response_model=StatusCheck)
-async def create_status_check(input: StatusCheckCreate):
-    status_dict = input.model_dump()
-    status_obj = StatusCheck(**status_dict)
-    _ = await db.status_checks.insert_one(status_obj.model_dump())
-    return status_obj
-
-@api_router.get("/status", response_model=List[StatusCheck])
-async def get_status_checks():
-    status_checks = await db.status_checks.find().to_list(1000)
-    return [StatusCheck(**status_check) for status_check in status_checks]
-
 # Feature routers — each exposes its own APIRouter, folded into /api here
 from lib.auth import ensure_bootstrap_accounts  # noqa: E402
 from routers import (  # noqa: E402
@@ -105,7 +93,9 @@ app.include_router(api_router)
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    # Explicit origins only: reflecting any origin together with credentials
+    # would let a third-party site read the API with the user's cookie.
+    allow_origins=[o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip()],
     allow_methods=["*"],
     allow_headers=["*"],
 )

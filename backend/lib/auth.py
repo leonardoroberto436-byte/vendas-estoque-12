@@ -48,11 +48,14 @@ _SHOP_ACTIONS = frozenset(
         "reports:read",
     }
 )
+# A seller sells; editing the catalogue and adjusting stock by hand are
+# management actions (they can mask shrinkage), so they stay with the ADMIN.
+_SELLER_ACTIONS = frozenset({"shop:read", "sales:create", "returns:create", "reports:read"})
 PERMISSIONS: dict[str, frozenset[str]] = {
     # The SaaS owner administers the platform; they do not operate a customer's shop.
     ROLE_PLATFORM_OWNER: frozenset({"platform:manage"}),
     ROLE_ADMIN: _SHOP_ACTIONS | frozenset({"users:manage"}),
-    ROLE_OPERADOR: _SHOP_ACTIONS,
+    ROLE_OPERADOR: _SELLER_ACTIONS,
 }
 
 # Subscription states that still allow working in the app.
@@ -99,6 +102,8 @@ async def create_session(user_id: str, response: Response) -> str:
         token,
         max_age=SESSION_DAYS * 24 * 3600,
         httponly=True,
+        # The app is served over HTTPS; Secure keeps the cookie off plain http.
+        secure=True,
         samesite="lax",
         path="/",
     )

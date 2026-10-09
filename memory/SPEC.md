@@ -25,6 +25,18 @@ Planos: `TESTE` (14 dias, R$ 0) · `INICIAL` (R$ 49,90) · `PROFISSIONAL` (R$ 79
 
 **Vencimento + avisos**: `organizations.due_date` (definido manualmente pelo dono, gravado às 12:00 UTC para não virar o dia em America/Sao_Paulo). O cron `.emergent/crons.yml` → `POST /api/cron/subscription-reminders` (Bearer `WEBHOOK_CRON_SECRET`, acka na hora e processa em background) roda 12:00 BRT todo dia e envia e-mail 7/3/1 dia antes e no dia, deduplicado por `reminders_sent: ["YYYY-MM-DD:dias"]`. Trocar a data zera o ciclo. Trigger manual: `POST /api/platform/run-due-reminders`.
 
+## Permissões (deny-by-default, `lib/auth.py`)
+- `PLATFORM_OWNER`: só `platform:manage` — 403 em qualquer rota de loja.
+- `ADMIN` (empresa): `shop:read`, `shop:write`, `products:write`, `stock:write`, `sales:create`, `returns:create`, `reports:read`, `users:manage`.
+- `OPERADOR` (vendedor): **só** `shop:read`, `sales:create`, `returns:create`, `reports:read` — não cria/edita/apaga produto, não ajusta estoque, não gerencia usuários nem a marca. Rotas de escrita usam `Depends(require("<permissão>"))`; a UI esconde os botões correspondentes (Produtos e Movimentações).
+
+## Endurecimento de segurança (auditoria 09/10/2026 — `/app/test_reports/security_audit.md`)
+- `CORS_ORIGINS` com origem explícita (nunca `*` com credenciais).
+- Cookie de sessão: `HttpOnly` + `Secure` + `SameSite=Lax` → **testes precisam usar HTTPS**.
+- `lib/throttle.py`: 8 tentativas/5 min no login (por IP+conta, zeradas no acerto) e 5/15 min no esqueci-senha → 429.
+- Rotas de exemplo `/api/status` removidas.
+- Suítes: `backend/tests/test_tenant_isolation.py` (50 testes) e `backend/audit_dynamic.py` (66 testes dinâmicos, cria e apaga duas empresas fictícias).
+
 ## Marca da empresa (cupom e relatório)
 `organizations.branding` = `{trade_name, cnpj, phone, address, logo}` (logo = data URL PNG/JPG, máx. 300 KB). `GET /api/settings/branding` (qualquer membro — o PDV precisa) · `PUT /api/settings/branding` (**só ADMIN**). Editado em `/empresa`, aplicado no cupom do PDV (tela, impressão 80mm e texto do WhatsApp) e no cabeçalho de impressão do relatório mensal.
 

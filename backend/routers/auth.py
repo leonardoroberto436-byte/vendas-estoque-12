@@ -24,6 +24,7 @@ from lib.auth import (
 from lib.db import db
 from lib.email import send_password_reset, send_signup_pending
 from lib.subscriptions import days_until
+from lib.throttle import clear_throttle, throttle
 from models.org import (
     TRIAL_DAYS,
     ForgotPasswordRequest,
@@ -157,6 +158,8 @@ async def signup(payload: SignupRequest, request: Request):
 @router.post("/login", response_model=SessionUser)
 async def login(payload: LoginRequest, request: Request, response: Response):
     email = payload.email.strip().lower()
+    # brute-force brake: 8 tries per 5 min per IP+account, cleared on success
+    throttle(request, "login", email, limit=8, window=300)
     user = await db.users.find_one({"email": email})
     # same message for unknown email and wrong password — no account enumeration
     if not user or not verify_password(payload.password, user.get("password_hash", "")):
@@ -193,6 +196,7 @@ async def login(payload: LoginRequest, request: Request, response: Response):
 
     now = datetime.now(timezone.utc)
     await db.users.update_one({"id": user["id"]}, {"$set": {"last_login_at": now}})
+    clear_throttle("login", request, email)
     await create_session(user["id"], response)
     await _log_access(request, "LOGIN_OK", email, user)
     return _session_user({**user, "last_login_at": now}, org)
@@ -242,6 +246,7 @@ async def change_password(
 async def forgot_password(payload: ForgotPasswordRequest, request: Request):
     """Always answers the same way — an attacker learns nothing about who exists."""
     email = payload.email.strip().lower()
+    throttle(request, "forgot", email, limit=5, window=900)
     user = await db.users.find_one({"email": email})
     generic = {
         "message": (

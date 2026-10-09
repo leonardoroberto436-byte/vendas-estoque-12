@@ -5,7 +5,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from lib.auth import Principal, require_org, scoped
+from lib.auth import Principal, require, require_org, scoped
 from lib.db import db
 from models.inventory import StockMovement, StockMovementCreate
 
@@ -38,7 +38,8 @@ async def list_movements(
 
 @router.post("/movements", response_model=StockMovement, status_code=201)
 async def create_movement(
-    payload: StockMovementCreate, principal: Principal = Depends(require_org)
+    payload: StockMovementCreate,
+    principal: Principal = Depends(require("stock:write")),
 ):
     product = await db.products.find_one(scoped(principal, {"id": payload.product_id}))
     if not product:

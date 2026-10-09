@@ -4,6 +4,7 @@ import { ArrowDownRight, ArrowUpRight, Plus, SlidersHorizontal } from "lucide-re
 import { apiGet } from "@/lib/api";
 import type { Product, StockMovement } from "@/lib/types";
 import { MOVEMENT_LABELS, formatDateTime } from "@/lib/format";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
 import MovementDialog from "@/components/MovementDialog";
 import { Button } from "@/components/ui/button";
@@ -18,6 +19,8 @@ import {
 } from "@/components/ui/table";
 
 export default function Stock() {
+  // Manual stock entries/adjustments are an ADMIN action (they can mask shrinkage).
+  const { isAdmin } = useCurrentUser();
   const [entryOpen, setEntryOpen] = useState(false);
   const [adjustOpen, setAdjustOpen] = useState(false);
 
@@ -47,6 +50,8 @@ export default function Stock() {
           </p>
         </div>
         <div className="flex gap-2">
+          {isAdmin && (
+          <>
           <Button onClick={() => setEntryOpen(true)} data-testid="btn-open-stock-in-modal" className="active:scale-[0.98]">
             <Plus className="size-4" />
             Entrada de Estoque
@@ -59,6 +64,8 @@ export default function Stock() {
             <SlidersHorizontal className="size-4" />
             Ajuste Manual
           </Button>
+          </>
+          )}
         </div>
       </div>
 

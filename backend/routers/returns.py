@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from lib.auth import Principal, require_org, scoped
+from lib.auth import Principal, require, require_org, scoped
 from lib.db import db
 from models.inventory import (
     ReturnableItem,
@@ -90,7 +90,9 @@ async def returnable_sales(limit: int = 50, principal: Principal = Depends(requi
 
 
 @router.post("", response_model=SaleReturn, status_code=201)
-async def create_return(payload: ReturnCreate, principal: Principal = Depends(require_org)):
+async def create_return(
+    payload: ReturnCreate, principal: Principal = Depends(require("returns:create"))
+):
     # a sale id from another company resolves to nothing here
     sale = await db.sales.find_one(scoped(principal, {"id": payload.sale_id}))
     if not sale:

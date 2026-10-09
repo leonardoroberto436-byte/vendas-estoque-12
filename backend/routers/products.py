@@ -10,7 +10,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
-from lib.auth import Principal, require_org, scoped
+from lib.auth import Principal, require, require_org, scoped
 from lib.db import db
 from models.inventory import Product, ProductCreate, ProductUpdate, StockMovement
 
@@ -59,7 +59,9 @@ async def get_product(product_id: str, principal: Principal = Depends(require_or
 
 
 @router.post("", response_model=Product, status_code=201)
-async def create_product(payload: ProductCreate, principal: Principal = Depends(require_org)):
+async def create_product(
+    payload: ProductCreate, principal: Principal = Depends(require("products:write"))
+):
     sku = payload.sku.strip().upper()
     # SKU is unique per company, not globally — two companies may use the same code
     existing = await db.products.find_one(scoped(principal, {"sku": sku}))
@@ -88,7 +90,9 @@ async def create_product(payload: ProductCreate, principal: Principal = Depends(
 
 @router.put("/{product_id}", response_model=Product)
 async def update_product(
-    product_id: str, payload: ProductUpdate, principal: Principal = Depends(require_org)
+    product_id: str,
+    payload: ProductUpdate,
+    principal: Principal = Depends(require("products:write")),
 ):
     doc = await db.products.find_one(scoped(principal, {"id": product_id}))
     if not doc:
@@ -109,7 +113,9 @@ async def update_product(
 
 
 @router.delete("/{product_id}", status_code=204)
-async def delete_product(product_id: str, principal: Principal = Depends(require_org)):
+async def delete_product(
+    product_id: str, principal: Principal = Depends(require("products:write"))
+):
     result = await db.products.delete_one(scoped(principal, {"id": product_id}))
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Produto não encontrado")

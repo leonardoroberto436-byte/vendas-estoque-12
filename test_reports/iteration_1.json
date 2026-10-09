@@ -1,0 +1,74 @@
+{
+  "iteration": 1,
+  "passed": 8,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [],
+  "retest_needed": false,
+  "summary": "All 8 acceptance-matrix criteria exercised: 3 browser checks (admin full workflow, seller sale+return, seller UI restrictions) and 6 backend pytest files (50 pre-existing isolation/platform/suspension tests + 3 new tscheck files for operator server-side permission blocks, login throttle, and CORS/status lockdown) -- 55/55 backend tests passing, 3/3 browser checks passing. The team's own security_audit.md and audit_dynamic.py (66/66) corroborate the same findings on the public preview URL.",
+  "checks": [
+    {
+      "criterion": "Company ADMIN keeps full use of the app after a permission tightening: create/edit/delete product, manual stock entry, POS sale, monthly report",
+      "name": "admin-full-workflow",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as leonardoroberto436@gmail.com; created product tscheck-admin-produto-*, edited sale price, confirmed row in /produtos; created ENTRADA stock movement via /estoque modal, new row appeared; added product to POS cart and finalized sale, receipt modal rendered with total/seller; opened /relatorio, report-daily-chart rendered without error; deleted the throwaway product, row disappeared. Screenshots: product-created, stock-entry-done, sale-receipt, report-rendered, product-deleted."
+    },
+    {
+      "criterion": "Seller (OPERADOR) can log in, see dashboard/catalogue, register a sale at POS and create a return",
+      "name": "seller-sale-and-return",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as tscheck.operador.seller@teste-saas.com (created via admin POST /api/users); dashboard (app-title) and /produtos table with existing rows rendered; added a product to POS cart, finalized sale, receipt modal appeared; opened /devolucoes, found the sale in returnable-sales-table, incremented quantity, submitted with reason, return-modal closed (return accepted). Screenshots: dashboard-loaded, catalogue-loaded, seller-sale-receipt, return-created."
+    },
+    {
+      "criterion": "Seller (OPERADOR) is blocked from management actions in the UI and on the server",
+      "name": "seller-ui-restrictions",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "As the same OPERADOR: nav-admin and nav-company links absent (0 count); /produtos shows no btn-open-create-product, no product-edit-btn-*/product-delete-btn-*, and the 'somente leitura' label is visible per row; /estoque shows no btn-open-stock-in-modal / btn-open-stock-adjustment-modal. Screenshots: products-readonly, stock-readonly."
+    },
+    {
+      "criterion": "Seller (OPERADOR) is blocked from management actions on the server (API side of the same criterion)",
+      "name": "test_tscheck_operator_write_blocked.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: OPERADOR session gets 403 on POST/PUT/DELETE /api/products, POST /api/stock/movements, GET /api/users, PUT /api/settings/branding; same session gets 200 on GET /api/products and 201 on POST /api/sales. 1 passed."
+    },
+    {
+      "criterion": "Cross-company isolation holds via the API when IDs are swapped",
+      "name": "test_tenant_isolation.py (cross-tenant subset)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest tests/test_tenant_isolation.py: GET/PUT/DELETE on another company's product/sale/return/user all return 404 (test_cannot_read_other_company_product_by_id, test_cannot_update_other_company_product, test_cannot_delete_other_company_product, test_cannot_read_other_company_sale, test_cannot_return_other_company_sale, test_cannot_touch_user_of_other_company). 50 passed as part of the 55-test run."
+    },
+    {
+      "criterion": "Only the platform owner reaches the global admin area",
+      "name": "test_tenant_isolation.py (platform-area subset)",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "test_company_admin_cannot_reach_platform_area and test_platform_owner_cannot_read_shop_data: company ADMIN gets 403 on /platform/stats,organizations,users,revenue,plan-prices and cannot approve/suspend; platform owner gets 403 on /products,/sales,/dashboard/stats,/settings/branding,/stock/movements,/returns,/users. Cross-checked live against the public URL via audit_dynamic.py (17/17 'Administração global' block passed)."
+    },
+    {
+      "criterion": "Login brute-force throttle works and does not punish honest users",
+      "name": "test_tscheck_login_throttle.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: 8 wrong-password attempts -> 401 each, 9th attempt -> 429 with a retry-after header; a correct login after 4 wrong attempts returns 200 and a fresh client can fail 4 more times without being pre-throttled (counter cleared on success). 2 passed."
+    },
+    {
+      "criterion": "Blocking a company stops it immediately",
+      "name": "test_tenant_isolation.py::test_suspending_a_company_revokes_its_sessions_immediately",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "An already-open session of the suspended company gets 401 on its next request; a fresh login attempt afterward returns 403. Part of the 55-test backend run."
+    },
+    {
+      "criterion": "Removed boilerplate endpoints and CORS lockdown",
+      "name": "test_tscheck_cors_and_status.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "pytest: GET/POST /api/status -> 404; OPTIONS /api/auth/login with Origin https://site-malicioso.example returns no access-control-allow-origin header, while the app's own origin gets access-control-allow-origin echoed back. 2 passed. Confirmed independently via curl: GET /api/status -> 404."
+    }
+  ]
+}

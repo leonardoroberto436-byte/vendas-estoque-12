@@ -11,7 +11,7 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from lib.auth import Principal, require_org, scoped
+from lib.auth import Principal, require, require_org, scoped
 from lib.db import db
 from models.inventory import Sale, SaleCreate, SaleItem, StockMovement
 
@@ -45,7 +45,9 @@ async def get_sale(sale_id: str, principal: Principal = Depends(require_org)):
 
 
 @router.post("", response_model=Sale, status_code=201)
-async def create_sale(payload: SaleCreate, principal: Principal = Depends(require_org)):
+async def create_sale(
+    payload: SaleCreate, principal: Principal = Depends(require("sales:create"))
+):
     # merge duplicate lines for the same product
     wanted: dict[str, int] = {}
     for item in payload.items:

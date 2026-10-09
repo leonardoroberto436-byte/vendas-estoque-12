@@ -12,6 +12,7 @@ import {
   money,
   stockStatus,
 } from "@/lib/format";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -58,6 +59,9 @@ const num = (value: string) => Number(value.replace(",", ".")) || 0;
 
 export default function Products() {
   const queryClient = useQueryClient();
+  // Sellers (OPERADOR) read the catalogue; only the company ADMIN edits it —
+  // the backend enforces this, the UI just avoids offering a blocked action.
+  const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editing, setEditing] = useState<Product | null>(null);
@@ -151,10 +155,12 @@ export default function Products() {
             Preços, margem e estoque de cada item cadastrado
           </p>
         </div>
-        <Button onClick={openCreate} data-testid="btn-open-create-product" className="active:scale-[0.98]">
-          <Plus className="size-4" />
-          Novo Produto
-        </Button>
+        {isAdmin && (
+          <Button onClick={openCreate} data-testid="btn-open-create-product" className="active:scale-[0.98]">
+            <Plus className="size-4" />
+            Novo Produto
+          </Button>
+        )}
       </div>
 
       <div className="relative mb-4 max-w-md">
@@ -220,6 +226,11 @@ export default function Products() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-1">
+                        {!isAdmin && (
+                          <span className="text-xs font-medium text-slate-400">somente leitura</span>
+                        )}
+                        {isAdmin && (
+                        <>
                         <Button
                           size="icon-sm"
                           variant="outline"
@@ -238,6 +249,8 @@ export default function Products() {
                         >
                           <Trash2 className="size-3.5 text-red-600" />
                         </Button>
+                        </>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

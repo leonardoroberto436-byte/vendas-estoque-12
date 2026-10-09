@@ -19,7 +19,9 @@ def _uid() -> str:
     return str(uuid.uuid4())
 
 
-MovementType = Literal["ENTRADA", "VENDA", "AJUSTE_POSITIVO", "AJUSTE_NEGATIVO", "PERDA"]
+MovementType = Literal[
+    "ENTRADA", "VENDA", "DEVOLUCAO", "AJUSTE_POSITIVO", "AJUSTE_NEGATIVO", "PERDA"
+]
 PaymentMethod = Literal["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"]
 
 
@@ -45,6 +47,7 @@ class ProductUpdate(BaseModel):
 
 class Product(BaseModel):
     id: str = Field(default_factory=_uid)
+    org_id: Optional[str] = None
     name: str
     sku: str
     category: str
@@ -81,6 +84,8 @@ class SaleItem(BaseModel):
 
 class Sale(BaseModel):
     id: str = Field(default_factory=_uid)
+    org_id: Optional[str] = None
+    code: str = ""
     items: List[SaleItem]
     subtotal: float
     discount: float
@@ -89,7 +94,68 @@ class Sale(BaseModel):
     profit: float
     payment_method: PaymentMethod
     notes: str = ""
+    seller_id: Optional[str] = None
+    seller_name: str = ""
+    returned_total: float = 0.0
     created_at: datetime = Field(default_factory=_now)
+
+
+# --------------------------------------------------------------- devoluções
+class ReturnItemInput(BaseModel):
+    product_id: str
+    quantity: int = Field(gt=0)
+
+
+class ReturnCreate(BaseModel):
+    sale_id: str
+    items: List[ReturnItemInput] = Field(min_length=1)
+    reason: str = Field(default="", max_length=240)
+    restock: bool = True
+
+
+class ReturnItem(BaseModel):
+    product_id: str
+    product_name: str
+    sku: str
+    quantity: int
+    unit_price: float
+    unit_cost: float
+    line_total: float
+
+
+class SaleReturn(BaseModel):
+    id: str = Field(default_factory=_uid)
+    org_id: Optional[str] = None
+    sale_id: str
+    sale_code: str = ""
+    items: List[ReturnItem]
+    refund_total: float
+    cost_total: float
+    reason: str = ""
+    restocked: bool = True
+    operator_id: Optional[str] = None
+    operator_name: str = ""
+    created_at: datetime = Field(default_factory=_now)
+
+
+class ReturnableItem(BaseModel):
+    product_id: str
+    product_name: str
+    sku: str
+    sold_quantity: int
+    returned_quantity: int
+    returnable_quantity: int
+    unit_price: float
+
+
+class ReturnableSale(BaseModel):
+    sale_id: str
+    sale_code: str
+    created_at: datetime
+    seller_name: str
+    total: float
+    already_refunded: float
+    items: List[ReturnableItem]
 
 
 # --------------------------------------------------------- stock movements
@@ -102,6 +168,7 @@ class StockMovementCreate(BaseModel):
 
 class StockMovement(BaseModel):
     id: str = Field(default_factory=_uid)
+    org_id: Optional[str] = None
     product_id: str
     product_name: str
     sku: str
@@ -110,6 +177,7 @@ class StockMovement(BaseModel):
     delta: int
     stock_after: int
     reason: str = ""
+    operator_name: str = ""
     sale_id: Optional[str] = None
     created_at: datetime = Field(default_factory=_now)
 
@@ -177,6 +245,13 @@ class MonthlyReport(BaseModel):
     top_products: List[TopProduct]
 
 
+class TopSeller(BaseModel):
+    seller_id: Optional[str] = None
+    name: str
+    sales_count: int
+    revenue: float
+
+
 class DashboardStats(BaseModel):
     today: str
     today_sales_count: int
@@ -186,6 +261,15 @@ class DashboardStats(BaseModel):
     out_of_stock_count: int
     inventory_value: float
     product_count: int
+    period_days: int
+    period_revenue: float
+    period_profit: float
+    period_sales_count: int
+    period_returns_count: int
+    period_refunded: float
+    period_net_revenue: float
+    period_average_ticket: float
     low_stock_items: List[LowStockItem]
     revenue_series: List[RevenuePoint]
     top_products: List[TopProduct]
+    top_sellers: List[TopSeller]

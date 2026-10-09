@@ -10,12 +10,14 @@ import {
   ShieldCheck,
   ShoppingCart,
   Store,
+  Undo2,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { apiGet } from "@/lib/api";
 import type { DashboardStats } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { endSession } from "@/lib/session";
+import { ORG_STATUS_LABELS, SUBSCRIPTION_LABELS } from "@/lib/format";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
@@ -24,6 +26,7 @@ const NAV = [
   { to: "/", label: "Visão Geral", icon: LayoutDashboard, testId: "nav-dashboard" },
   { to: "/vender", label: "Vender (Balcão)", icon: ShoppingCart, testId: "nav-sales-pos" },
   { to: "/vendas", label: "Histórico", icon: Receipt, testId: "nav-sales-history" },
+  { to: "/devolucoes", label: "Devoluções", icon: Undo2, testId: "nav-returns" },
   { to: "/produtos", label: "Produtos", icon: Package, testId: "nav-products" },
   { to: "/estoque", label: "Movimentações", icon: ArrowLeftRight, testId: "nav-stock" },
   { to: "/alertas", label: "Alertas", icon: AlertTriangle, testId: "nav-alerts" },
@@ -56,8 +59,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   Estoque &amp; Vendas Pro
                 </p>
-                <p className="text-xs font-medium text-slate-500">
-                  Controle de catálogo, estoque e vendas de balcão
+                <p className="text-xs font-medium text-slate-500" data-testid="appshell-company-name">
+                  {user?.organization?.name ?? "Controle de estoque e vendas"}
                 </p>
               </div>
             </div>
@@ -142,6 +145,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </nav>
         </div>
       </header>
+
+      {user?.organization && user.organization.subscription_status === "INADIMPLENTE" && (
+        <div
+          className="border-b border-amber-200 bg-amber-50 px-5 py-2.5 text-center text-sm font-medium text-amber-900 print:hidden"
+          data-testid="subscription-warning-banner"
+        >
+          Assinatura {SUBSCRIPTION_LABELS[user.organization.subscription_status].toLowerCase()} —
+          regularize o pagamento para manter o acesso.
+        </div>
+      )}
+      {user?.organization && user.organization.plan === "TESTE" && user.organization.trial_days_left !== null && (
+        <div
+          className="border-b border-sky-200 bg-sky-50 px-5 py-2.5 text-center text-sm font-medium text-sky-900 print:hidden"
+          data-testid="trial-banner"
+        >
+          Período de teste: {user.organization.trial_days_left} dias restantes ·
+          empresa {ORG_STATUS_LABELS[user.organization.status].toLowerCase()}
+        </div>
+      )}
 
       <main className="mx-auto max-w-[1400px] px-5 py-6 lg:px-8 lg:py-8">{children}</main>
       <Toaster richColors />

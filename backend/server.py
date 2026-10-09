@@ -23,7 +23,7 @@ from lib.db import client, db, ensure_indexes
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.state.index_task = asyncio.create_task(ensure_indexes())  # background: a big index build must not block boot
-    await ensure_bootstrap_admin()
+    await ensure_bootstrap_accounts()
     yield
     client.close()
 
@@ -62,22 +62,36 @@ async def get_status_checks():
     return [StatusCheck(**status_check) for status_check in status_checks]
 
 # Feature routers — each exposes its own APIRouter, folded into /api here
-from fastapi import Depends  # noqa: E402
+from lib.auth import ensure_bootstrap_accounts  # noqa: E402
+from routers import (  # noqa: E402
+    auth,
+    dashboard,
+    platform,
+    products,
+    reports,
+    returns,
+    sales,
+    stock,
+    users,
+)
 
-from lib.auth import ensure_bootstrap_admin, get_current_user, require  # noqa: E402
-from routers import auth, dashboard, products, reports, sales, stock, users  # noqa: E402
-
-# Public: login/logout/me handle their own session checks
+# Public: signup / login / forgot-password handle their own checks
 api_router.include_router(auth.router)
 
-# Everything below needs a valid session; users/* additionally needs users:manage
-_signed_in = [Depends(get_current_user)]
-api_router.include_router(products.router, dependencies=_signed_in)
-api_router.include_router(sales.router, dependencies=[Depends(require("sales:create"))])
-api_router.include_router(stock.router, dependencies=_signed_in)
-api_router.include_router(dashboard.router, dependencies=_signed_in)
-api_router.include_router(reports.router, dependencies=[Depends(require("reports:read"))])
+# Tenant-scoped: each router declares require_org (or require(...)) per route,
+# so the org always comes from the session, never from the request.
+api_router.include_router(products.router)
+api_router.include_router(sales.router)
+api_router.include_router(returns.router)
+api_router.include_router(stock.router)
+api_router.include_router(dashboard.router)
+api_router.include_router(reports.router)
+
+# Company admin only (users:manage) — scoped to their own organization
 api_router.include_router(users.router)
+
+# SaaS owner only (platform:manage) — the single cross-organization surface
+api_router.include_router(platform.router)
 
 # Include the router in the main app
 app.include_router(api_router)

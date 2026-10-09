@@ -61,20 +61,30 @@ export default function SalesHistory() {
           <Table data-testid="sales-history-table">
             <TableHeader>
               <TableRow>
-                <TableHead>Data</TableHead>
+                <TableHead>Cupom / Data</TableHead>
+                <TableHead>Vendedor</TableHead>
                 <TableHead className="text-right">Itens</TableHead>
                 <TableHead>Pagamento</TableHead>
                 <TableHead className="text-right">Desconto</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Lucro</TableHead>
+                <TableHead className="text-right">Devolvido</TableHead>
                 <TableHead className="text-right">Detalhe</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {sales.map((sale) => (
                 <TableRow key={sale.id} data-testid={`sales-history-row-${sale.id}`}>
-                  <TableCell className="whitespace-nowrap font-mono text-xs tabular-nums text-slate-600">
-                    {formatDateTime(sale.created_at)}
+                  <TableCell className="whitespace-nowrap">
+                    <p className="font-mono text-xs font-semibold text-slate-900">
+                      {sale.code || sale.id.slice(0, 8)}
+                    </p>
+                    <p className="font-mono text-xs tabular-nums text-slate-500">
+                      {formatDateTime(sale.created_at)}
+                    </p>
+                  </TableCell>
+                  <TableCell className="text-slate-600" data-testid={`sales-history-seller-${sale.id}`}>
+                    {sale.seller_name || "—"}
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums">
                     {sale.items.reduce((sum, item) => sum + item.quantity, 0)}
@@ -91,6 +101,9 @@ export default function SalesHistory() {
                   <TableCell className="text-right font-mono tabular-nums text-emerald-700">
                     {money(sale.profit)}
                   </TableCell>
+                  <TableCell className="text-right font-mono tabular-nums text-red-600">
+                    {sale.returned_total > 0 ? `- ${money(sale.returned_total)}` : "—"}
+                  </TableCell>
                   <TableCell className="text-right">
                     <Button
                       size="icon-sm"
@@ -106,7 +119,7 @@ export default function SalesHistory() {
               ))}
               {sales.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center text-sm text-slate-500">
+                  <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-500">
                     Nenhuma venda registrada ainda.
                   </TableCell>
                 </TableRow>
@@ -121,7 +134,9 @@ export default function SalesHistory() {
           <DialogHeader>
             <DialogTitle>Detalhe da venda</DialogTitle>
             <DialogDescription>
-              {selected ? formatDateTime(selected.created_at) : ""}
+              {selected
+                ? `${selected.code} · ${formatDateTime(selected.created_at)} · ${selected.seller_name || "—"}`
+                : ""}
             </DialogDescription>
           </DialogHeader>
           {selected && (

@@ -1,47 +1,129 @@
-// Hand-written mirrors of the Pydantic models in backend/models/inventory.py.
+// Hand-written mirrors of the Pydantic models in backend/models/*.py.
 // Change one, change the other in the same edit.
 
-export type Role = "ADMIN" | "OPERADOR";
+// ----------------------------------------------------------- organizations
+export type Plan = "TESTE" | "BASICO" | "PROFISSIONAL";
+export type SubscriptionStatus = "TESTE" | "ATIVO" | "INADIMPLENTE" | "CANCELADO";
+export type OrgStatus = "PENDENTE" | "APROVADA" | "SUSPENSA";
+
+export interface OrgSummary {
+  id: string;
+  name: string;
+  status: OrgStatus;
+  plan: Plan;
+  plan_label: string;
+  subscription_status: SubscriptionStatus;
+  trial_ends_at: string | null;
+  trial_days_left: number | null;
+}
+
+export interface PlatformOrgView extends OrgSummary {
+  owner_name: string;
+  owner_email: string;
+  created_at: string;
+  approved_at: string | null;
+  suspended_at: string | null;
+  user_count: number;
+  product_count: number;
+  sales_count: number;
+  last_activity_at: string | null;
+}
+
+export interface PlatformUserView {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  is_active: boolean;
+  org_id: string | null;
+  org_name: string;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+export interface PlatformStats {
+  total_orgs: number;
+  pending_orgs: number;
+  approved_orgs: number;
+  suspended_orgs: number;
+  total_users: number;
+  by_plan: Record<string, number>;
+  by_subscription: Record<string, number>;
+  recent_orgs: PlatformOrgView[];
+}
+
+export interface SignupRequest {
+  name: string;
+  company_name: string;
+  email: string;
+  password: string;
+}
+
+export interface SignupResponse {
+  organization_id: string;
+  company_name: string;
+  status: OrgStatus;
+  message: string;
+}
+
+// -------------------------------------------------------------------- users
+export type Role = "PLATFORM_OWNER" | "ADMIN" | "OPERADOR";
+export type CompanyRole = "ADMIN" | "OPERADOR";
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: Role;
+  org_id: string | null;
   is_active: boolean;
   created_at: string;
   last_login_at: string | null;
+}
+
+export interface SessionUser extends User {
+  organization: OrgSummary | null;
 }
 
 export interface UserCreate {
   name: string;
   email: string;
   password: string;
-  role: Role;
+  role: CompanyRole;
   is_active: boolean;
 }
 
 export interface UserUpdate {
   name?: string;
-  role?: Role;
+  role?: CompanyRole;
   is_active?: boolean;
 }
 
 export interface AccessLog {
   id: string;
   user_id: string | null;
+  org_id: string | null;
   user_name: string;
   email: string;
   role: Role | null;
-  event: "LOGIN_OK" | "LOGIN_FALHOU" | "LOGIN_BLOQUEADO" | "LOGOUT";
+  event:
+    | "LOGIN_OK"
+    | "LOGIN_FALHOU"
+    | "LOGIN_BLOQUEADO"
+    | "LOGOUT"
+    | "CADASTRO"
+    | "RESET_SOLICITADO"
+    | "RESET_CONCLUIDO";
   ip: string;
   user_agent: string;
   created_at: string;
 }
 
+// ---------------------------------------------------------------- inventory
 export type MovementType =
   | "ENTRADA"
   | "VENDA"
+  | "DEVOLUCAO"
   | "AJUSTE_POSITIVO"
   | "AJUSTE_NEGATIVO"
   | "PERDA";
@@ -50,6 +132,7 @@ export type PaymentMethod = "DINHEIRO" | "PIX" | "CARTAO_DEBITO" | "CARTAO_CREDI
 
 export interface Product {
   id: string;
+  org_id: string | null;
   name: string;
   sku: string;
   category: string;
@@ -92,6 +175,8 @@ export interface SaleItem {
 
 export interface Sale {
   id: string;
+  org_id: string | null;
+  code: string;
   items: SaleItem[];
   subtotal: number;
   discount: number;
@@ -100,6 +185,9 @@ export interface Sale {
   profit: number;
   payment_method: PaymentMethod;
   notes: string;
+  seller_id: string | null;
+  seller_name: string;
+  returned_total: number;
   created_at: string;
 }
 
@@ -110,8 +198,63 @@ export interface SaleCreate {
   notes: string;
 }
 
+// -------------------------------------------------------------- devoluções
+export interface ReturnItem {
+  product_id: string;
+  product_name: string;
+  sku: string;
+  quantity: number;
+  unit_price: number;
+  unit_cost: number;
+  line_total: number;
+}
+
+export interface SaleReturn {
+  id: string;
+  org_id: string | null;
+  sale_id: string;
+  sale_code: string;
+  items: ReturnItem[];
+  refund_total: number;
+  cost_total: number;
+  reason: string;
+  restocked: boolean;
+  operator_id: string | null;
+  operator_name: string;
+  created_at: string;
+}
+
+export interface ReturnCreate {
+  sale_id: string;
+  items: { product_id: string; quantity: number }[];
+  reason: string;
+  restock: boolean;
+}
+
+export interface ReturnableItem {
+  product_id: string;
+  product_name: string;
+  sku: string;
+  sold_quantity: number;
+  returned_quantity: number;
+  returnable_quantity: number;
+  unit_price: number;
+}
+
+export interface ReturnableSale {
+  sale_id: string;
+  sale_code: string;
+  created_at: string;
+  seller_name: string;
+  total: number;
+  already_refunded: number;
+  items: ReturnableItem[];
+}
+
+// ------------------------------------------------------------------- stock
 export interface StockMovement {
   id: string;
+  org_id: string | null;
   product_id: string;
   product_name: string;
   sku: string;
@@ -120,6 +263,7 @@ export interface StockMovement {
   delta: number;
   stock_after: number;
   reason: string;
+  operator_name: string;
   sale_id: string | null;
   created_at: string;
 }
@@ -131,6 +275,7 @@ export interface StockMovementCreate {
   reason: string;
 }
 
+// --------------------------------------------------------------- dashboard
 export interface LowStockItem {
   id: string;
   name: string;
@@ -153,6 +298,37 @@ export interface TopProduct {
   revenue: number;
 }
 
+export interface TopSeller {
+  seller_id: string | null;
+  name: string;
+  sales_count: number;
+  revenue: number;
+}
+
+export interface DashboardStats {
+  today: string;
+  today_sales_count: number;
+  today_revenue: number;
+  today_profit: number;
+  low_stock_count: number;
+  out_of_stock_count: number;
+  inventory_value: number;
+  product_count: number;
+  period_days: number;
+  period_revenue: number;
+  period_profit: number;
+  period_sales_count: number;
+  period_returns_count: number;
+  period_refunded: number;
+  period_net_revenue: number;
+  period_average_ticket: number;
+  low_stock_items: LowStockItem[];
+  revenue_series: RevenuePoint[];
+  top_products: TopProduct[];
+  top_sellers: TopSeller[];
+}
+
+// ----------------------------------------------------------------- reports
 export interface ReportMonth {
   year: number;
   month: number;
@@ -190,19 +366,5 @@ export interface MonthlyReport {
   best_day_revenue: number;
   daily: ReportDayPoint[];
   payments: PaymentBreakdown[];
-  top_products: TopProduct[];
-}
-
-export interface DashboardStats {
-  today: string;
-  today_sales_count: number;
-  today_revenue: number;
-  today_profit: number;
-  low_stock_count: number;
-  out_of_stock_count: number;
-  inventory_value: number;
-  product_count: number;
-  low_stock_items: LowStockItem[];
-  revenue_series: RevenuePoint[];
   top_products: TopProduct[];
 }

@@ -1,6 +1,34 @@
 # Estoque & Vendas Pro — SPEC
 
-App de gerenciamento de vendas e estoque (pt-BR). **Acesso restrito por login** — só o admin libera contas.
+**SaaS multiempresa (multi-tenant)** de gestão de vendas e estoque (pt-BR).
+
+## Arquitetura de isolamento
+- Coleção `organizations` = uma empresa cliente = um workspace isolado.
+- Todo documento de negócio carrega `org_id` (`products`, `sales`, `returns`, `stock_movements`, `users`, `access_logs`).
+- O `org_id` vem SEMPRE do principal da sessão (`lib/auth.py`), nunca do corpo/URL. `scoped(principal, extra)` monta o filtro Mongo já fixado na empresa — inclusive em buscas por id, o que neutraliza IDOR (id de outra empresa = 404).
+- `require_org` protege rotas de loja; `require("platform:manage")` protege `/api/platform/*`.
+- SKU é único **por empresa** (índice composto `org_id+sku`), não global.
+- Cadastro público cria a empresa como `PENDENTE`; ela só funciona após o dono da plataforma aprovar.
+- Suspender empresa, cancelar assinatura ou bloquear usuário apaga as sessões na hora (principal relido do banco a cada request).
+
+## Papéis
+| Papel | Pode |
+|---|---|
+| `PLATFORM_OWNER` | Só `/plataforma`: ver/aprovar/suspender empresas, trocar plano e status de assinatura. **Não** acessa dados de loja (403). |
+| `ADMIN` | Tudo da sua empresa + `/admin` (usuários da própria empresa). |
+| `OPERADOR` | Tudo da loja, exceto gerenciar usuários. |
+
+## Assinaturas (estrutura pronta, **sem cobrança real**)
+Planos: `TESTE` (14 dias) · `BASICO` · `PROFISSIONAL`. Status: `TESTE`, `ATIVO`, `INADIMPLENTE` (avisa e mantém acesso), `CANCELADO` (bloqueia login). A integração com provedor de pagamento será feita depois.
+
+## Migração executada
+`backend/migrate_tenancy.py` (dry-run por padrão, `--apply` executa): faz backup completo em `/app/backups/<timestamp>` (mongodump), cria/reutiliza a empresa dos dados legados ("Minha Loja", APROVADA/Profissional/ATIVO), preenche `org_id` retroativamente, remove o índice global de SKU e aplica o novo conjunto. Resultado da execução: 17 produtos, 17 vendas, 48 movimentações, 7 logs e 1 usuário migrados, **zero órfãos**.
+
+## Testes
+`backend/tests/test_tenant_isolation.py` — **50 testes, todos passando**: duas empresas fictícias, tentativas reais de ler/alterar/excluir dados da outra (produtos, vendas, estoque, devoluções, relatórios, usuários), injeção de `org_id` no payload, cookie forjado, operador tentando se promover, admin tentando criar PLATFORM_OWNER, suspensão/cancelamento derrubando sessão, e preservação dos dados legados.
+Rodar: `cd /app/backend && set -a && . ./.env && set +a && python -m pytest tests/test_tenant_isolation.py -q`
+
+Sessão = cookie httpOnly `ev_session` (14 dias). Senhas em PBKDF2-SHA256 (240k rounds). Tokens de reset guardados com hash SHA-256, uso único, 30 min. Credenciais em `memory/test_credentials.md`.
 
 ## Papéis (RBAC, uma única loja — sem multi-tenant)
 | Papel | Pode |
@@ -17,8 +45,12 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 | Rota | Tela |
 |---|---|
 | `/login` | Login (pública) |
-| `/` | Visão Geral — KPIs, gráfico de faturamento 7 dias, top produtos, alertas |
-| `/vender` | Venda Balcão (POS) — carrinho, desconto, pagamento, finalizar |
+| `/cadastro` | Cadastro público de empresa (pública) |
+| `/esqueci-senha` · `/redefinir-senha` | Recuperação de senha por e-mail (pública) |
+| `/devolucoes` | Painel de Devoluções — estorno por item, repõe estoque, ajusta faturamento líquido |
+| `/plataforma` | Painel da Plataforma (**só PLATFORM_OWNER**) |
+| `/` | Visão Geral — KPIs do dia, seletor de **7/15/30 dias** (faturamento, devoluções, líquido, ticket médio), gráficos, **vendas por vendedor**, alertas |
+| `/vender` | Venda Balcão — carrinho, desconto, pagamento, finalizar; **cupom com vendedor e data, botão Imprimir (80mm) e Enviar no WhatsApp** |
 | `/vendas` | Histórico de Vendas + modal de detalhe |
 | `/produtos` | Catálogo CRUD (criar/editar/excluir, margem calculada) |
 | `/estoque` | Movimentações + entrada e ajuste manual |
@@ -29,7 +61,11 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 
 ## API (todas sob `/api`)
 Todas as rotas abaixo exigem sessão válida (401 sem cookie), exceto `/api/auth/login`.
-- `POST /api/auth/login` (pública) · `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password`
+- `POST /api/auth/signup` (pública) · `POST /api/auth/login` (pública) · `POST /api/auth/forgot-password` (pública) · `POST /api/auth/reset-password` (pública)
+- `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password`
+- `GET /api/platform/stats|organizations|users` · `PUT /api/platform/organizations/{id}/status|plan` — **PLATFORM_OWNER only**
+- `GET /api/returns` · `GET /api/returns/returnable` · `POST /api/returns`
+- `GET /api/dashboard/stats?days=7|15|30`
 - `GET/POST /api/users` · `PUT /api/users/{id}` · `PUT /api/users/{id}/password` · `DELETE /api/users/{id}` · `GET /api/users/access-logs` — **ADMIN only (403 para operador)**
 - `GET /api/reports/months` · `GET /api/reports/monthly?year=&month=` · `GET /api/reports/monthly.xlsx?year=&month=` (download de 4 abas: Resumo, Produtos, Pagamentos, Por dia — gerado com openpyxl)
 - `GET /api/products?search=&category=` · `GET /api/products/categories` · `GET /api/products/{id}`

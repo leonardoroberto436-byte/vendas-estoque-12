@@ -1,5 +1,14 @@
 import { ApiError } from "@/lib/api";
-import type { MovementType, PaymentMethod, Product } from "@/lib/types";
+import type {
+  MovementType,
+  OrgStatus,
+  PaymentMethod,
+  Plan,
+  Product,
+  Role,
+  Sale,
+  SubscriptionStatus,
+} from "@/lib/types";
 
 const brl = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" });
 const dateTime = new Intl.DateTimeFormat("pt-BR", {
@@ -26,10 +35,90 @@ export const PAYMENT_LABELS: Record<PaymentMethod, string> = {
 export const MOVEMENT_LABELS: Record<MovementType, string> = {
   ENTRADA: "Entrada de Estoque",
   VENDA: "Saída por Venda",
+  DEVOLUCAO: "Devolução (retorno)",
   AJUSTE_POSITIVO: "Ajuste Positivo",
   AJUSTE_NEGATIVO: "Ajuste Negativo",
   PERDA: "Perda / Quebra",
 };
+
+export const ROLE_LABELS: Record<Role, string> = {
+  PLATFORM_OWNER: "Dono da Plataforma",
+  ADMIN: "Administrador",
+  OPERADOR: "Operador",
+};
+
+export const ORG_STATUS_LABELS: Record<OrgStatus, string> = {
+  PENDENTE: "Aguardando liberação",
+  APROVADA: "Liberada",
+  SUSPENSA: "Suspensa",
+};
+
+export const ORG_STATUS_CLASSES: Record<OrgStatus, string> = {
+  PENDENTE: "bg-amber-100 text-amber-900 border-amber-200",
+  APROVADA: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  SUSPENSA: "bg-red-100 text-red-800 border-red-200",
+};
+
+export const PLAN_LABELS: Record<Plan, string> = {
+  TESTE: "Período de teste",
+  BASICO: "Básico",
+  PROFISSIONAL: "Profissional",
+};
+
+export const SUBSCRIPTION_LABELS: Record<SubscriptionStatus, string> = {
+  TESTE: "Em teste",
+  ATIVO: "Ativo",
+  INADIMPLENTE: "Inadimplente",
+  CANCELADO: "Cancelado",
+};
+
+export const SUBSCRIPTION_CLASSES: Record<SubscriptionStatus, string> = {
+  TESTE: "bg-sky-100 text-sky-800 border-sky-200",
+  ATIVO: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  INADIMPLENTE: "bg-amber-100 text-amber-900 border-amber-200",
+  CANCELADO: "bg-slate-200 text-slate-700 border-slate-300",
+};
+
+/** Plain-text receipt used for printing and for the WhatsApp message. */
+export function receiptText(sale: Sale, company: string): string {
+  const lines = [
+    `*${company}*`,
+    `Cupom ${sale.code}`,
+    formatDateTime(sale.created_at),
+    `Vendedor: ${sale.seller_name || "-"}`,
+    "",
+    ...sale.items.map(
+      (item) =>
+        `${item.quantity}x ${item.product_name} - ${money(item.line_total)}`,
+    ),
+    "",
+    `Subtotal: ${money(sale.subtotal)}`,
+  ];
+  if (sale.discount > 0) lines.push(`Desconto: -${money(sale.discount)}`);
+  lines.push(`TOTAL: ${money(sale.total)}`);
+  lines.push(`Pagamento: ${PAYMENT_LABELS[sale.payment_method]}`);
+  lines.push("", "Obrigado pela preferencia!");
+  return lines.join("\n");
+}
+
+/** wa.me deep link. Phone is optional — without it WhatsApp asks who to send to. */
+export function whatsappLink(text: string, phone?: string): string {
+  const digits = (phone ?? "").replace(/\D/g, "");
+  const target = digits ? (digits.length > 11 ? digits : `55${digits}`) : "";
+  return `https://wa.me/${target}?text=${encodeURIComponent(text)}`;
+}
+
+/** Print only the receipt area, leaving the rest of the app out of the page. */
+export function printReceipt(): void {
+  document.body.classList.add("printing-receipt");
+  const cleanup = () => {
+    document.body.classList.remove("printing-receipt");
+    window.removeEventListener("afterprint", cleanup);
+  };
+  window.addEventListener("afterprint", cleanup);
+  window.print();
+  window.setTimeout(cleanup, 1500);
+}
 
 export type StockStatus = "ESGOTADO" | "BAIXO" | "OK";
 

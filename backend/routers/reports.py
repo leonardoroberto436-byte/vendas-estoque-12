@@ -6,8 +6,10 @@ from io import BytesIO
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
+
+from lib.auth import Principal, require_org, scoped
 
 from lib.db import db
 from models.inventory import (
@@ -44,9 +46,9 @@ def _local(value) -> datetime:
 
 
 @router.get("/months", response_model=list[ReportMonth])
-async def available_months():
+async def available_months(principal: Principal = Depends(require_org)):
     """Months that already have at least one sale, newest first (plus the current month)."""
-    docs = await db.sales.find({}, {"created_at": 1}).to_list(20000)
+    docs = await db.sales.find(scoped(principal), {"created_at": 1}).to_list(20000)
     keys: set[tuple[int, int]] = set()
     for doc in docs:
         local = _local(doc["created_at"])
@@ -63,6 +65,7 @@ async def available_months():
 async def monthly_report(
     year: int | None = Query(default=None, ge=2000, le=2100),
     month: int | None = Query(default=None, ge=1, le=12),
+    principal: Principal = Depends(require_org),
 ):
     now = datetime.now(timezone.utc).astimezone(BR_TZ)
     year = year or now.year
@@ -73,7 +76,9 @@ async def monthly_report(
     end_year, end_month = (year + 1, 1) if month == 12 else (year, month + 1)
     end = datetime(end_year, end_month, 1, tzinfo=BR_TZ).astimezone(timezone.utc)
 
-    sales = await db.sales.find({"created_at": {"$gte": start, "$lt": end}}).to_list(20000)
+    sales = await db.sales.find(
+        scoped(principal, {"created_at": {"$gte": start, "$lt": end}})
+    ).to_list(20000)
 
     revenue = round(sum(float(s["total"]) for s in sales), 2)
     cost = round(sum(float(s.get("cost_total", 0)) for s in sales), 2)
@@ -156,13 +161,14 @@ async def monthly_report(
 async def monthly_report_xlsx(
     year: int | None = Query(default=None, ge=2000, le=2100),
     month: int | None = Query(default=None, ge=1, le=12),
+    principal: Principal = Depends(require_org),
 ):
     """Same closing figures as /monthly, as a four-sheet .xlsx for the accountant."""
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
     from openpyxl.utils import get_column_letter
 
-    report = await monthly_report(year=year, month=month)
+    report = await monthly_report(year=year, month=month, principal=principal)
 
     header_font = Font(bold=True, color="FFFFFF")
     header_fill = PatternFill("solid", fgColor="0D9488")

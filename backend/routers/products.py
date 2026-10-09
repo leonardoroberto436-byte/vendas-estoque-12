@@ -1,10 +1,16 @@
-"""Products CRUD — mounted under /api/products."""
+"""Products CRUD — mounted under /api/products. Tenant-scoped.
+
+Every query goes through `scoped(principal, ...)`, so a lookup by id is always
+`{"id": ..., "org_id": <caller's org>}`. Knowing another company's product id is
+therefore useless: the row simply does not exist for this caller (404).
+"""
 
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
+from lib.auth import Principal, require_org, scoped
 from lib.db import db
 from models.inventory import Product, ProductCreate, ProductUpdate, StockMovement
 
@@ -24,43 +30,48 @@ def aware(doc: dict) -> dict:
 async def list_products(
     search: Optional[str] = Query(default=None),
     category: Optional[str] = Query(default=None),
+    principal: Principal = Depends(require_org),
 ):
-    query: dict = {}
+    extra: dict = {}
     if search:
-        query["$or"] = [
+        extra["$or"] = [
             {"name": {"$regex": search, "$options": "i"}},
             {"sku": {"$regex": search, "$options": "i"}},
         ]
     if category and category != "TODAS":
-        query["category"] = category
-    docs = await db.products.find(query).sort("name", 1).to_list(1000)
+        extra["category"] = category
+    docs = await db.products.find(scoped(principal, extra)).sort("name", 1).to_list(1000)
     return [Product(**aware(doc)) for doc in docs]
 
 
 @router.get("/categories", response_model=List[str])
-async def list_categories():
-    values = await db.products.distinct("category")
+async def list_categories(principal: Principal = Depends(require_org)):
+    values = await db.products.distinct("category", scoped(principal))
     return sorted(v for v in values if v)
 
 
 @router.get("/{product_id}", response_model=Product)
-async def get_product(product_id: str):
-    doc = await db.products.find_one({"id": product_id})
+async def get_product(product_id: str, principal: Principal = Depends(require_org)):
+    doc = await db.products.find_one(scoped(principal, {"id": product_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     return Product(**aware(doc))
 
 
 @router.post("", response_model=Product, status_code=201)
-async def create_product(payload: ProductCreate):
-    existing = await db.products.find_one({"sku": payload.sku.strip().upper()})
+async def create_product(payload: ProductCreate, principal: Principal = Depends(require_org)):
+    sku = payload.sku.strip().upper()
+    # SKU is unique per company, not globally — two companies may use the same code
+    existing = await db.products.find_one(scoped(principal, {"sku": sku}))
     if existing:
         raise HTTPException(status_code=409, detail="SKU já cadastrado")
-    product = Product(**{**payload.model_dump(), "sku": payload.sku.strip().upper()})
+
+    product = Product(**{**payload.model_dump(), "sku": sku}, org_id=principal.org_id)
     await db.products.insert_one(product.model_dump())
 
     if product.current_stock > 0:
         movement = StockMovement(
+            org_id=principal.org_id,
             product_id=product.id,
             product_name=product.name,
             sku=product.sku,
@@ -69,32 +80,37 @@ async def create_product(payload: ProductCreate):
             delta=product.current_stock,
             stock_after=product.current_stock,
             reason="Estoque inicial do cadastro",
+            operator_name=principal.name,
         )
         await db.stock_movements.insert_one(movement.model_dump())
     return product
 
 
 @router.put("/{product_id}", response_model=Product)
-async def update_product(product_id: str, payload: ProductUpdate):
-    doc = await db.products.find_one({"id": product_id})
+async def update_product(
+    product_id: str, payload: ProductUpdate, principal: Principal = Depends(require_org)
+):
+    doc = await db.products.find_one(scoped(principal, {"id": product_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
 
     changes = {k: v for k, v in payload.model_dump(exclude_none=True).items()}
     if "sku" in changes:
         changes["sku"] = changes["sku"].strip().upper()
-        clash = await db.products.find_one({"sku": changes["sku"], "id": {"$ne": product_id}})
+        clash = await db.products.find_one(
+            scoped(principal, {"sku": changes["sku"], "id": {"$ne": product_id}})
+        )
         if clash:
             raise HTTPException(status_code=409, detail="SKU já cadastrado em outro produto")
     changes["updated_at"] = datetime.now(timezone.utc)
-    await db.products.update_one({"id": product_id}, {"$set": changes})
-    updated = await db.products.find_one({"id": product_id})
+    await db.products.update_one(scoped(principal, {"id": product_id}), {"$set": changes})
+    updated = await db.products.find_one(scoped(principal, {"id": product_id}))
     return Product(**aware(updated))
 
 
 @router.delete("/{product_id}", status_code=204)
-async def delete_product(product_id: str):
-    result = await db.products.delete_one({"id": product_id})
+async def delete_product(product_id: str, principal: Principal = Depends(require_org)):
+    result = await db.products.delete_one(scoped(principal, {"id": product_id}))
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Produto não encontrado")
     return None

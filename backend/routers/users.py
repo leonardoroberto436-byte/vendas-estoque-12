@@ -10,15 +10,14 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from lib.auth import Principal, hash_password, require
+from lib.auth import Principal, hash_password, require, scoped
 from lib.db import db
 from models.users import AccessLog, PasswordReset, User, UserCreate, UserUpdate
 
-router = APIRouter(
-    prefix="/users",
-    tags=["users"],
-    dependencies=[Depends(require("users:manage"))],
-)
+router = APIRouter(prefix="/users", tags=["users"])
+
+# Company admins only, and only inside their own organization.
+_manage = require("users:manage")
 
 
 def _aware(value):
@@ -39,26 +38,34 @@ def _to_model(doc: dict) -> User:
     )
 
 
-async def _admin_count() -> int:
-    return await db.users.count_documents({"role": "ADMIN", "is_active": True})
+async def _admin_count(principal: Principal) -> int:
+    """Active admins of THIS company."""
+    return await db.users.count_documents(
+        scoped(principal, {"role": "ADMIN", "is_active": True})
+    )
 
 
 @router.get("", response_model=List[User])
-async def list_users():
-    docs = await db.users.find().sort("created_at", 1).to_list(500)
+async def list_users(principal: Principal = Depends(_manage)):
+    docs = await db.users.find(scoped(principal)).sort("created_at", 1).to_list(500)
     return [_to_model(doc) for doc in docs]
 
 
 @router.get("/access-logs", response_model=List[AccessLog])
-async def access_logs(limit: int = 200):
+async def access_logs(limit: int = 200, principal: Principal = Depends(_manage)):
     """Login/logout trail — newest first. Declared before /{user_id} routes."""
-    docs = await db.access_logs.find().sort("created_at", -1).to_list(min(limit, 500))
+    docs = (
+        await db.access_logs.find(scoped(principal))
+        .sort("created_at", -1)
+        .to_list(min(limit, 500))
+    )
     return [AccessLog(**{**doc, "created_at": _aware(doc["created_at"])}) for doc in docs]
 
 
 @router.post("", response_model=User, status_code=201)
-async def create_user(payload: UserCreate):
+async def create_user(payload: UserCreate, principal: Principal = Depends(_manage)):
     email = payload.email.strip().lower()
+    # email is globally unique: one login belongs to exactly one company
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.")
 
@@ -66,6 +73,7 @@ async def create_user(payload: UserCreate):
         name=payload.name.strip(),
         email=email,
         role=payload.role,
+        org_id=principal.org_id,
         is_active=payload.is_active,
     )
     await db.users.insert_one(
@@ -78,9 +86,9 @@ async def create_user(payload: UserCreate):
 async def update_user(
     user_id: str,
     payload: UserUpdate,
-    principal: Principal = Depends(require("users:manage")),
+    principal: Principal = Depends(_manage),
 ):
-    doc = await db.users.find_one({"id": user_id})
+    doc = await db.users.find_one(scoped(principal, {"id": user_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
 
@@ -101,43 +109,46 @@ async def update_user(
             raise HTTPException(
                 status_code=400, detail="Você não pode remover o seu próprio acesso de administrador."
             )
-        if await _admin_count() <= 1:
+        if await _admin_count(principal) <= 1:
             raise HTTPException(
                 status_code=400, detail="É necessário manter pelo menos um administrador ativo."
             )
 
     if changes:
-        await db.users.update_one({"id": user_id}, {"$set": changes})
+        await db.users.update_one(scoped(principal, {"id": user_id}), {"$set": changes})
         if changes.get("is_active") is False or changes.get("role"):
             await db.sessions.delete_many({"user_id": user_id})  # revoke now, not at expiry
 
-    updated = await db.users.find_one({"id": user_id})
+    updated = await db.users.find_one(scoped(principal, {"id": user_id}))
     return _to_model(updated)
 
 
 @router.put("/{user_id}/password", status_code=204)
-async def reset_password(user_id: str, payload: PasswordReset):
-    doc = await db.users.find_one({"id": user_id})
+async def reset_password(
+    user_id: str, payload: PasswordReset, principal: Principal = Depends(_manage)
+):
+    doc = await db.users.find_one(scoped(principal, {"id": user_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     await db.users.update_one(
-        {"id": user_id}, {"$set": {"password_hash": hash_password(payload.password)}}
+        scoped(principal, {"id": user_id}),
+        {"$set": {"password_hash": hash_password(payload.password)}},
     )
     await db.sessions.delete_many({"user_id": user_id})
     return None
 
 
 @router.delete("/{user_id}", status_code=204)
-async def delete_user(user_id: str, principal: Principal = Depends(require("users:manage"))):
-    doc = await db.users.find_one({"id": user_id})
+async def delete_user(user_id: str, principal: Principal = Depends(_manage)):
+    doc = await db.users.find_one(scoped(principal, {"id": user_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
     if doc["id"] == principal.id:
         raise HTTPException(status_code=400, detail="Você não pode excluir a sua própria conta.")
-    if doc["role"] == "ADMIN" and await _admin_count() <= 1:
+    if doc["role"] == "ADMIN" and await _admin_count(principal) <= 1:
         raise HTTPException(
             status_code=400, detail="É necessário manter pelo menos um administrador ativo."
         )
-    await db.users.delete_one({"id": user_id})
+    await db.users.delete_one(scoped(principal, {"id": user_id}))
     await db.sessions.delete_many({"user_id": user_id})
     return None

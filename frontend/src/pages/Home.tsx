@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import {
@@ -6,6 +7,8 @@ import {
   Boxes,
   Receipt,
   TrendingUp,
+  Undo2,
+  UserRound,
 } from "lucide-react";
 import {
   Bar,
@@ -63,10 +66,13 @@ function Kpi({ label, value, hint, icon: Icon, tone, testId }: KpiProps) {
   );
 }
 
+const PERIODS = [7, 15, 30] as const;
+
 export default function Home() {
+  const [days, setDays] = useState<number>(7);
   const { data, isError, isLoading } = useQuery({
-    queryKey: ["dashboard-stats"],
-    queryFn: () => apiGet<DashboardStats>("/dashboard/stats"),
+    queryKey: ["dashboard-stats", days],
+    queryFn: () => apiGet<DashboardStats>(`/dashboard/stats?days=${days}`),
     refetchOnWindowFocus: false,
   });
 
@@ -85,11 +91,33 @@ export default function Home() {
             Resumo de vendas, faturamento e saúde do estoque
           </p>
         </div>
-        {stats && (
-          <Badge variant="secondary" className="font-mono text-xs" data-testid="dashboard-product-count">
-            {stats.product_count} produtos cadastrados
-          </Badge>
-        )}
+        <div className="flex items-center gap-3">
+          {stats && (
+            <Badge variant="secondary" className="font-mono text-xs" data-testid="dashboard-product-count">
+              {stats.product_count} produtos
+            </Badge>
+          )}
+          <div
+            className="inline-flex rounded-lg border border-slate-200 bg-white p-1 shadow-xs"
+            data-testid="dashboard-period-switch"
+          >
+            {PERIODS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setDays(option)}
+                data-testid={`dashboard-period-${option}`}
+                className={`rounded-md px-3 py-1.5 text-sm font-semibold transition-colors duration-150 ease-out ${
+                  days === option
+                    ? "bg-slate-900 text-white"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`}
+              >
+                {option} dias
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -127,12 +155,61 @@ export default function Home() {
         />
       </div>
 
+      <Card className="mb-6 border-slate-200/90 shadow-xs" data-testid="dashboard-period-panel">
+        <CardContent className="grid grid-cols-2 gap-5 p-5 sm:grid-cols-3 lg:grid-cols-5">
+          {[
+            {
+              label: `Faturamento ${stats?.period_days ?? days} dias`,
+              value: stats ? money(stats.period_revenue) : "—",
+              testId: "dashboard-period-revenue",
+              tone: "text-slate-900",
+            },
+            {
+              label: "Devoluções",
+              value: stats ? `- ${money(stats.period_refunded)}` : "—",
+              testId: "dashboard-period-refunded",
+              tone: "text-red-600",
+            },
+            {
+              label: "Faturamento líquido",
+              value: stats ? money(stats.period_net_revenue) : "—",
+              testId: "dashboard-period-net-revenue",
+              tone: "text-emerald-700",
+            },
+            {
+              label: "Vendas no período",
+              value: stats ? String(stats.period_sales_count) : "—",
+              testId: "dashboard-period-sales-count",
+              tone: "text-slate-900",
+            },
+            {
+              label: "Ticket médio",
+              value: stats ? money(stats.period_average_ticket) : "—",
+              testId: "dashboard-period-average-ticket",
+              tone: "text-slate-900",
+            },
+          ].map((item) => (
+            <div key={item.testId}>
+              <p className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                {item.label}
+              </p>
+              <p
+                className={`mt-1.5 font-mono text-xl font-semibold tabular-nums ${item.tone}`}
+                data-testid={item.testId}
+              >
+                {item.value}
+              </p>
+            </div>
+          ))}
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
         <Card className="border-slate-200/90 shadow-xs lg:col-span-7">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
               <TrendingUp className="size-4 text-teal-600" />
-              Faturamento dos últimos 7 dias
+              Faturamento dos últimos {stats?.period_days ?? days} dias
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -168,7 +245,7 @@ export default function Home() {
         <Card className="border-slate-200/90 shadow-xs lg:col-span-5">
           <CardHeader>
             <CardTitle className="text-base font-bold tracking-tight">
-              Produtos mais vendidos (7 dias)
+              Produtos mais vendidos ({stats?.period_days ?? days} dias)
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -207,6 +284,42 @@ export default function Home() {
           </CardContent>
         </Card>
 
+        <Card className="border-slate-200/90 shadow-xs lg:col-span-12">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight">
+              <UserRound className="size-4 text-sky-600" />
+              Vendas por vendedor ({stats?.period_days ?? days} dias)
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul
+              className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3"
+              data-testid="dashboard-top-sellers"
+            >
+              {(stats?.top_sellers ?? []).map((seller, index) => (
+                <li
+                  key={seller.seller_id ?? seller.name}
+                  data-testid={`dashboard-seller-item-${index}`}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white px-3 py-2.5"
+                >
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">{seller.name}</p>
+                    <p className="text-xs text-slate-500">{seller.sales_count} vendas</p>
+                  </div>
+                  <span className="shrink-0 font-mono text-sm font-bold tabular-nums text-slate-900">
+                    {money(seller.revenue)}
+                  </span>
+                </li>
+              ))}
+              {(stats?.top_sellers.length ?? 0) === 0 && (
+                <li className="text-sm text-slate-600">
+                  {isLoading ? "Carregando…" : "Nenhuma venda registrada no período."}
+                </li>
+              )}
+            </ul>
+          </CardContent>
+        </Card>
+
         <Card className="border-amber-200 bg-amber-50/40 shadow-xs lg:col-span-12">
           <CardHeader>
             <CardTitle className="flex items-center justify-between gap-3 text-base font-bold tracking-tight">
@@ -214,6 +327,14 @@ export default function Home() {
                 <AlertTriangle className="size-4 text-amber-600" />
                 Alertas de reposição
               </span>
+              <Link
+                to="/devolucoes"
+                className="text-xs font-semibold text-slate-500 underline-offset-4 hover:underline"
+                data-testid="dashboard-returns-link"
+              >
+                <Undo2 className="mr-1 inline size-3" />
+                {stats?.period_returns_count ?? 0} devoluções
+              </Link>
               <Link
                 to="/alertas"
                 className="text-xs font-semibold text-teal-700 underline-offset-4 hover:underline"

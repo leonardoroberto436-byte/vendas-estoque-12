@@ -18,6 +18,9 @@ const EVENT_LABELS: Record<AccessLog["event"], string> = {
   LOGIN_FALHOU: "Senha incorreta",
   LOGIN_BLOQUEADO: "Acesso bloqueado",
   LOGOUT: "Saiu",
+  CADASTRO: "Conta criada",
+  RESET_SOLICITADO: "Pediu nova senha",
+  RESET_CONCLUIDO: "Senha redefinida",
 };
 
 const EVENT_CLASSES: Record<AccessLog["event"], string> = {
@@ -25,6 +28,9 @@ const EVENT_CLASSES: Record<AccessLog["event"], string> = {
   LOGIN_FALHOU: "bg-red-100 text-red-800 border-red-200",
   LOGIN_BLOQUEADO: "bg-amber-100 text-amber-900 border-amber-200",
   LOGOUT: "bg-slate-100 text-slate-700 border-slate-200",
+  CADASTRO: "bg-sky-100 text-sky-800 border-sky-200",
+  RESET_SOLICITADO: "bg-amber-100 text-amber-900 border-amber-200",
+  RESET_CONCLUIDO: "bg-teal-100 text-teal-800 border-teal-200",
 };
 
 /** Short device summary so the admin recognises the machine without reading a UA string. */

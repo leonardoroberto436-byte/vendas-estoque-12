@@ -1,19 +1,26 @@
-"""Sales (venda balcão) — mounted under /api/sales.
+"""Sales (venda balcão) — mounted under /api/sales. Tenant-scoped.
 
-Finalising a sale decrements stock with a guarded update per item (the
-`current_stock >= quantity` filter is the concurrency guard) and rolls back
-anything already decremented if a later item cannot be served.
+Finalising a sale decrements stock with a guarded, org-scoped update per item
+(the `current_stock >= quantity` filter is the concurrency guard) and rolls back
+anything already decremented if a later item cannot be served. The seller is
+taken from the session principal, never from the request body.
 """
 
 from datetime import datetime, timezone
 from typing import List
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
+from lib.auth import Principal, require_org, scoped
 from lib.db import db
 from models.inventory import Sale, SaleCreate, SaleItem, StockMovement
 
 router = APIRouter(prefix="/sales", tags=["sales"])
+
+
+def _sale_code(created: datetime) -> str:
+    """Short human-readable receipt number, e.g. V-20261009-153847."""
+    return f"V-{created.astimezone(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
 
 
 def aware(doc: dict) -> dict:
@@ -24,29 +31,30 @@ def aware(doc: dict) -> dict:
 
 
 @router.get("", response_model=List[Sale])
-async def list_sales(limit: int = 200):
-    docs = await db.sales.find().sort("created_at", -1).to_list(limit)
+async def list_sales(limit: int = 200, principal: Principal = Depends(require_org)):
+    docs = await db.sales.find(scoped(principal)).sort("created_at", -1).to_list(limit)
     return [Sale(**aware(doc)) for doc in docs]
 
 
 @router.get("/{sale_id}", response_model=Sale)
-async def get_sale(sale_id: str):
-    doc = await db.sales.find_one({"id": sale_id})
+async def get_sale(sale_id: str, principal: Principal = Depends(require_org)):
+    doc = await db.sales.find_one(scoped(principal, {"id": sale_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Venda não encontrada")
     return Sale(**aware(doc))
 
 
 @router.post("", response_model=Sale, status_code=201)
-async def create_sale(payload: SaleCreate):
+async def create_sale(payload: SaleCreate, principal: Principal = Depends(require_org)):
     # merge duplicate lines for the same product
     wanted: dict[str, int] = {}
     for item in payload.items:
         wanted[item.product_id] = wanted.get(item.product_id, 0) + item.quantity
 
-    products = await db.products.find({"id": {"$in": list(wanted)}}).to_list(500)
+    products = await db.products.find(scoped(principal, {"id": {"$in": list(wanted)}})).to_list(500)
     by_id = {p["id"]: p for p in products}
 
+    # a product id from another company resolves to nothing here
     missing = [pid for pid in wanted if pid not in by_id]
     if missing:
         raise HTTPException(status_code=404, detail="Produto do carrinho não encontrado")
@@ -68,8 +76,11 @@ async def create_sale(payload: SaleCreate):
     try:
         for pid, qty in wanted.items():
             updated = await db.products.find_one_and_update(
-                {"id": pid, "current_stock": {"$gte": qty}},
-                {"$inc": {"current_stock": -qty}, "$set": {"updated_at": datetime.now(timezone.utc)}},
+                scoped(principal, {"id": pid, "current_stock": {"$gte": qty}}),
+                {
+                    "$inc": {"current_stock": -qty},
+                    "$set": {"updated_at": datetime.now(timezone.utc)},
+                },
                 return_document=True,
             )
             if not updated:
@@ -93,15 +104,20 @@ async def create_sale(payload: SaleCreate):
             )
     except Exception:
         for pid, qty in applied:  # give the stock back
-            await db.products.update_one({"id": pid}, {"$inc": {"current_stock": qty}})
+            await db.products.update_one(
+                scoped(principal, {"id": pid}), {"$inc": {"current_stock": qty}}
+            )
         raise
 
     subtotal = round(sum(i.line_total for i in sale_items), 2)
     discount = round(min(payload.discount, subtotal), 2)
     total = round(subtotal - discount, 2)
     cost_total = round(sum(i.unit_cost * i.quantity for i in sale_items), 2)
+    created = datetime.now(timezone.utc)
 
     sale = Sale(
+        org_id=principal.org_id,
+        code=_sale_code(created),
         items=sale_items,
         subtotal=subtotal,
         discount=discount,
@@ -110,11 +126,15 @@ async def create_sale(payload: SaleCreate):
         profit=round(total - cost_total, 2),
         payment_method=payload.payment_method,
         notes=payload.notes,
+        seller_id=principal.id,
+        seller_name=principal.name,
+        created_at=created,
     )
     await db.sales.insert_one(sale.model_dump())
 
     movements = [
         StockMovement(
+            org_id=principal.org_id,
             product_id=item.product_id,
             product_name=item.product_name,
             sku=item.sku,
@@ -122,7 +142,8 @@ async def create_sale(payload: SaleCreate):
             quantity=item.quantity,
             delta=-item.quantity,
             stock_after=stock_after[item.product_id],
-            reason="Baixa automática por venda",
+            reason=f"Baixa automática por venda {sale.code}",
+            operator_name=principal.name,
             sale_id=sale.id,
             created_at=sale.created_at,
         ).model_dump()

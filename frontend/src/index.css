@@ -164,4 +164,23 @@
     .break-inside-avoid {
         break-inside: avoid;
     }
+
+    /* Receipt mode: print only the coupon, nothing else on the page. */
+    body.printing-receipt * {
+        visibility: hidden !important;
+    }
+    body.printing-receipt .receipt-print-area,
+    body.printing-receipt .receipt-print-area * {
+        visibility: visible !important;
+    }
+    body.printing-receipt .receipt-print-area {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 80mm;
+        margin: 0;
+        padding: 4mm;
+        border: 0 !important;
+        box-shadow: none !important;
+    }
 }

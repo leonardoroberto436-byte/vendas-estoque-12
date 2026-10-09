@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
-import type { Role, User, UserCreate } from "@/lib/types";
+import type { CompanyRole, User, UserCreate } from "@/lib/types";
 import { errorMessage, formatDateTime } from "@/lib/format";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
@@ -37,12 +37,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-const ROLE_LABELS: Record<Role, string> = {
+const ROLE_LABELS: Record<CompanyRole, string> = {
   ADMIN: "Administrador",
   OPERADOR: "Operador",
 };
 
-const EMPTY = { name: "", email: "", password: "", role: "OPERADOR" as Role, is_active: true };
+const EMPTY = {
+  name: "",
+  email: "",
+  password: "",
+  role: "OPERADOR" as CompanyRole,
+  is_active: true,
+};
 
 export default function Admin() {
   const queryClient = useQueryClient();
@@ -181,7 +187,7 @@ export default function Admin() {
                         }
                       >
                         <SelectTrigger size="sm" className="w-40" data-testid={`user-role-select-${user.id}`}>
-                          <SelectValue>{(value) => ROLE_LABELS[value as Role]}</SelectValue>
+                          <SelectValue>{(value) => ROLE_LABELS[value as CompanyRole]}</SelectValue>
                         </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="ADMIN">Administrador</SelectItem>
@@ -297,10 +303,10 @@ export default function Admin() {
               <Label>Perfil</Label>
               <Select
                 value={form.role}
-                onValueChange={(value: string) => setForm({ ...form, role: value as Role })}
+                onValueChange={(value: string) => setForm({ ...form, role: value as CompanyRole })}
               >
                 <SelectTrigger data-testid="user-modal-role-select">
-                  <SelectValue>{(value) => ROLE_LABELS[value as Role]}</SelectValue>
+                  <SelectValue>{(value) => ROLE_LABELS[value as CompanyRole]}</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="OPERADOR">Operador</SelectItem>

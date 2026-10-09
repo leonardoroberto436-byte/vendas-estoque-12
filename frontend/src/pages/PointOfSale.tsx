@@ -1,10 +1,20 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { Minus, MessageCircle, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPost } from "@/lib/api";
 import type { PaymentMethod, Product, Sale, SaleCreate } from "@/lib/types";
-import { PAYMENT_LABELS, errorMessage, money, stockStatus } from "@/lib/format";
+import {
+  PAYMENT_LABELS,
+  errorMessage,
+  formatDateTime,
+  money,
+  printReceipt,
+  receiptText,
+  stockStatus,
+  whatsappLink,
+} from "@/lib/format";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -36,6 +46,9 @@ export default function PointOfSale() {
   const [payment, setPayment] = useState<PaymentMethod>("DINHEIRO");
   const [discount, setDiscount] = useState("0");
   const [receipt, setReceipt] = useState<Sale | null>(null);
+  const [phone, setPhone] = useState("");
+  const { user } = useCurrentUser();
+  const company = user?.organization?.name ?? "Estoque & Vendas Pro";
 
   const { data: products, isError } = useQuery({
     queryKey: ["products"],
@@ -99,6 +112,7 @@ export default function PointOfSale() {
       setCart({});
       setDiscount("0");
       setReceipt(sale);
+      setPhone("");
       toast.success(`Venda realizada: ${money(sale.total)}`);
       void queryClient.invalidateQueries({ queryKey: ["products"] });
       void queryClient.invalidateQueries({ queryKey: ["sales"] });
@@ -370,34 +384,107 @@ export default function PointOfSale() {
           <DialogHeader>
             <DialogTitle>Venda registrada</DialogTitle>
             <DialogDescription>
-              Estoque atualizado automaticamente para cada item vendido.
+              Estoque atualizado automaticamente. Imprima o cupom ou envie pelo WhatsApp.
             </DialogDescription>
           </DialogHeader>
+
           {receipt && (
-            <div className="space-y-2 text-sm">
-              {receipt.items.map((item) => (
-                <div key={item.product_id} className="flex justify-between gap-3">
-                  <span className="truncate text-slate-700">
-                    {item.quantity}× {item.product_name}
-                  </span>
-                  <span className="font-mono tabular-nums">{money(item.line_total)}</span>
-                </div>
-              ))}
-              <div className="flex justify-between border-t border-border pt-2 font-semibold">
-                <span>Total ({PAYMENT_LABELS[receipt.payment_method]})</span>
-                <span className="font-mono tabular-nums" data-testid="pos-receipt-total">
-                  {money(receipt.total)}
-                </span>
+            <div
+              className="receipt-print-area space-y-2 rounded-lg border border-dashed border-slate-300 bg-white p-4 font-mono text-sm"
+              data-testid="pos-receipt-sheet"
+            >
+              <div className="text-center">
+                <p className="text-base font-bold tracking-tight" data-testid="receipt-company">
+                  {company}
+                </p>
+                <p className="text-xs" data-testid="receipt-code">
+                  Cupom {receipt.code}
+                </p>
+                <p className="text-xs" data-testid="receipt-datetime">
+                  {formatDateTime(receipt.created_at)}
+                </p>
+                <p className="text-xs" data-testid="receipt-seller">
+                  Vendedor: {receipt.seller_name || "—"}
+                </p>
               </div>
+              <div className="border-t border-dashed border-slate-300 pt-2">
+                {receipt.items.map((item) => (
+                  <div key={item.product_id} className="flex justify-between gap-3">
+                    <span className="truncate">
+                      {item.quantity}× {item.product_name}
+                    </span>
+                    <span className="tabular-nums">{money(item.line_total)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-0.5 border-t border-dashed border-slate-300 pt-2">
+                <div className="flex justify-between">
+                  <span>Subtotal</span>
+                  <span className="tabular-nums">{money(receipt.subtotal)}</span>
+                </div>
+                {receipt.discount > 0 && (
+                  <div className="flex justify-between">
+                    <span>Desconto</span>
+                    <span className="tabular-nums">- {money(receipt.discount)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between text-base font-bold">
+                  <span>TOTAL</span>
+                  <span className="tabular-nums" data-testid="pos-receipt-total">
+                    {money(receipt.total)}
+                  </span>
+                </div>
+                <div className="flex justify-between text-xs">
+                  <span>Pagamento</span>
+                  <span>{PAYMENT_LABELS[receipt.payment_method]}</span>
+                </div>
+              </div>
+              <p className="pt-2 text-center text-xs">Obrigado pela preferência!</p>
             </div>
           )}
-          <DialogFooter>
+
+          <div className="space-y-2 print:hidden">
+            <Label htmlFor="pos-whatsapp-phone" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              WhatsApp do cliente (opcional)
+            </Label>
+            <Input
+              id="pos-whatsapp-phone"
+              value={phone}
+              onChange={(event) => setPhone(event.target.value)}
+              placeholder="(11) 98888-7777"
+              inputMode="tel"
+              data-testid="pos-whatsapp-phone-input"
+            />
+          </div>
+
+          <DialogFooter className="print:hidden">
+            <Button
+              variant="outline"
+              onClick={() => printReceipt()}
+              data-testid="pos-receipt-print-btn"
+            >
+              <Printer className="size-4" />
+              Imprimir
+            </Button>
+            {receipt && (
+              <a
+                href={whatsappLink(receiptText(receipt, company), phone)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors duration-150 ease-out hover:bg-emerald-700 active:scale-[0.98]"
+                data-testid="pos-receipt-whatsapp-btn"
+              >
+                <MessageCircle className="size-4" />
+                Enviar no WhatsApp
+              </a>
+            )}
             <Button onClick={() => setReceipt(null)} data-testid="pos-receipt-close">
               Nova venda
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </AppShell>
   );
 }

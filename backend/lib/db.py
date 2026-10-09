@@ -21,33 +21,53 @@ INDEXES: dict[str, list[IndexModel]] = {
     "status_checks": [IndexModel([("timestamp", DESCENDING)], name="timestamp_desc")],
     "products": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
-        IndexModel([("sku", ASCENDING)], name="sku", unique=True),
-        IndexModel([("category", ASCENDING), ("name", ASCENDING)], name="category_name"),
-        IndexModel([("name", ASCENDING)], name="name_asc"),
+        # SKU is unique PER COMPANY — a global unique index would let one tenant
+        # block another tenant's product code.
+        IndexModel([("org_id", ASCENDING), ("sku", ASCENDING)], name="org_sku", unique=True),
+        IndexModel([("org_id", ASCENDING), ("name", ASCENDING)], name="org_name"),
+        IndexModel([("org_id", ASCENDING), ("category", ASCENDING)], name="org_category"),
     ],
     "sales": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
-        IndexModel([("created_at", DESCENDING)], name="created_desc"),
+        IndexModel([("org_id", ASCENDING), ("created_at", DESCENDING)], name="org_created"),
+    ],
+    "returns": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("org_id", ASCENDING), ("created_at", DESCENDING)], name="org_created"),
+        IndexModel([("org_id", ASCENDING), ("sale_id", ASCENDING)], name="org_sale"),
     ],
     "stock_movements": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
-        IndexModel([("created_at", DESCENDING)], name="created_desc"),
-        IndexModel([("product_id", ASCENDING), ("created_at", DESCENDING)], name="product_created"),
+        IndexModel([("org_id", ASCENDING), ("created_at", DESCENDING)], name="org_created"),
+        IndexModel(
+            [("org_id", ASCENDING), ("product_id", ASCENDING), ("created_at", DESCENDING)],
+            name="org_product_created",
+        ),
+    ],
+    "organizations": [
+        IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("status", ASCENDING), ("created_at", DESCENDING)], name="status_created"),
+        IndexModel([("owner_email", ASCENDING)], name="owner_email"),
     ],
     "users": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
         IndexModel([("email", ASCENDING)], name="email", unique=True),
-        IndexModel([("created_at", ASCENDING)], name="created_asc"),
+        IndexModel([("org_id", ASCENDING), ("created_at", ASCENDING)], name="org_created"),
     ],
     "sessions": [
         IndexModel([("token", ASCENDING)], name="token", unique=True),
         IndexModel([("user_id", ASCENDING)], name="user_id"),
         IndexModel([("expires_at", ASCENDING)], name="expires_ttl", expireAfterSeconds=0),
     ],
+    "password_resets": [
+        IndexModel([("token_hash", ASCENDING)], name="token_hash", unique=True),
+        IndexModel([("user_id", ASCENDING)], name="user_id"),
+        IndexModel([("expires_at", ASCENDING)], name="expires_ttl", expireAfterSeconds=0),
+    ],
     "access_logs": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),
+        IndexModel([("org_id", ASCENDING), ("created_at", DESCENDING)], name="org_created"),
         IndexModel([("created_at", DESCENDING)], name="created_desc"),
-        IndexModel([("user_id", ASCENDING), ("created_at", DESCENDING)], name="user_created"),
     ],
 }
 

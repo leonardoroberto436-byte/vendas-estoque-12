@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import { apiPost } from "@/lib/api";
-import type { User } from "@/lib/types";
+import type { SessionUser } from "@/lib/types";
 import { errorMessage } from "@/lib/format";
 import { beginSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
@@ -21,11 +21,12 @@ export default function Login() {
 
   const login = useMutation({
     mutationFn: () =>
-      apiPost<User>("/auth/login", { email: email.trim(), password }),
+      apiPost<SessionUser>("/auth/login", { email: email.trim(), password }),
     onSuccess: (user) => {
       beginSession();
       toast.success(`Bem-vindo, ${user.name.split(" ")[0]}!`);
-      navigate("/", { replace: true });
+      // the SaaS owner has no shop workspace — straight to the platform area
+      navigate(user.role === "PLATFORM_OWNER" ? "/plataforma" : "/", { replace: true });
     },
     onError: (err) => {
       const message = errorMessage(err, "Não foi possível entrar. Tente novamente.");
@@ -130,9 +131,27 @@ export default function Login() {
           </CardContent>
         </Card>
 
-        <p className="mt-5 text-center text-xs text-slate-500">
-          Não tem acesso? Solicite ao administrador — contas são criadas apenas internamente.
-        </p>
+        <div className="mt-5 space-y-2 text-center text-sm">
+          <p>
+            <Link
+              to="/esqueci-senha"
+              className="font-semibold text-teal-700 hover:underline"
+              data-testid="login-forgot-password-link"
+            >
+              Esqueci minha senha
+            </Link>
+          </p>
+          <p className="text-slate-500">
+            Primeira vez aqui?{" "}
+            <Link
+              to="/cadastro"
+              className="font-semibold text-teal-700 hover:underline"
+              data-testid="login-signup-link"
+            >
+              Cadastrar minha empresa
+            </Link>
+          </p>
+        </div>
       </div>
       <Toaster richColors />
     </div>

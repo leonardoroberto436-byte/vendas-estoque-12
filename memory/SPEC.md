@@ -37,6 +37,12 @@ Planos: `TESTE` (14 dias, R$ 0) · `INICIAL` (R$ 49,90) · `PROFISSIONAL` (R$ 79
 - Rotas de exemplo `/api/status` removidas.
 - Suítes: `backend/tests/test_tenant_isolation.py` (50 testes) e `backend/audit_dynamic.py` (66 testes dinâmicos, cria e apaga duas empresas fictícias).
 
+## Backups automáticos e auditoria do proprietário
+- `lib/backups.py`: `run_backup()` roda `mongodump`, empacota em `/app/backups/auto-<ts>.tar.gz` e mantém os **7 mais recentes** (`BACKUP_KEEP`). Cada execução é registrada na coleção `backups` (OK/FALHOU + tamanho).
+- Cron `.emergent/crons.yml` → `POST /api/cron/backup` (Bearer `WEBHOOK_CRON_SECRET`), **06:00 BRT diário**.
+- Painel: `POST /api/platform/backups/run` (manual), `GET /api/platform/backups`, `GET /api/platform/backups/{arquivo}/download` (nome saneado — traversal → 404). Guarda fora do servidor = o dono baixa o .tar.gz.
+- Trilha de auditoria: `log_platform_action()` grava em `platform_logs` toda ação do dono — `EMPRESA_CRIADA`, `EMPRESA_EDITADA`, `SENHA_ADMIN_REDEFINIDA`, `STATUS_<novo>`, `PLANO_ALTERADO`, `PRECOS_ALTERADOS`, `BACKUP_MANUAL`. Lida em `GET /api/platform/logs` e exibida no painel. Todas as rotas são **PLATFORM_OWNER only** (403 para empresa, 401 anônimo).
+
 ## Marca da empresa (cupom e relatório)
 `organizations.branding` = `{trade_name, cnpj, phone, address, logo}` (logo = data URL PNG/JPG, máx. 300 KB). `GET /api/settings/branding` (qualquer membro — o PDV precisa) · `PUT /api/settings/branding` (**só ADMIN**). Editado em `/empresa`, aplicado no cupom do PDV (tela, impressão 80mm e texto do WhatsApp) e no cabeçalho de impressão do relatório mensal.
 

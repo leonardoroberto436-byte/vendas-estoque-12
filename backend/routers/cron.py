@@ -10,6 +10,7 @@ import os
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
+from lib.backups import run_backup
 from lib.subscriptions import run_due_reminders
 
 logger = logging.getLogger(__name__)
@@ -42,4 +43,21 @@ async def subscription_reminders(
         if len(_seen_runs) > 500:
             _seen_runs.clear()
     background.add_task(run_due_reminders)
+    return {"status": "accepted", "run_id": run_id}
+
+
+@router.post("/backup")
+async def nightly_backup(
+    background: BackgroundTasks,
+    authorization: str | None = Header(default=None),
+    x_webhook_id: str | None = Header(default=None),
+):
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    _check_auth(authorization)
+    run_id = x_webhook_id or ""
+    if run_id and run_id in _seen_runs:
+        return {"status": "duplicate", "run_id": run_id}
+    if run_id:
+        _seen_runs.add(run_id)
+    background.add_task(run_backup)
     return {"status": "accepted", "run_id": run_id}

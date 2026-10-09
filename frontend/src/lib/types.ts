@@ -41,6 +41,24 @@ export interface PlatformRevenue {
   by_plan: PlanRevenue[];
 }
 
+export interface PlatformLog {
+  id: string;
+  actor_email: string;
+  action: string;
+  target: string;
+  details: string;
+  created_at: string;
+}
+
+export interface BackupRecord {
+  id: string;
+  file: string;
+  size_bytes: number;
+  status: string;
+  error: string;
+  created_at: string;
+}
+
 export interface OrgBranding {
   trade_name: string;
   cnpj: string;

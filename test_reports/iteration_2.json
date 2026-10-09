@@ -1,0 +1,79 @@
+{
+  "iteration": 2,
+  "passed": 9,
+  "failed": 0,
+  "bugs": [],
+  "action_items": [
+    {
+      "severity": "low",
+      "note": "Pre-existing test suites (test_tenant_isolation.py, test_tscheck_operator_write_blocked.py, test_tscheck_login_throttle.py) create throwaway organizations via /auth/signup but there is no DELETE /platform/organizations endpoint to remove them, so every backend test run leaves residue in the owner's company table (21 orgs after this run vs. the 1 'Minha Loja' noted clean in seed_facts). Not a regression introduced this iteration and not re-authored per instructions, but the main agent should periodically clean the DB (as done before iteration 1) or add a delete-organization endpoint if the owner's panel must stay clean between runs."
+    }
+  ],
+  "retest_needed": false,
+  "summary": "9/9 checks passed (6 new artifacts for the backup/audit-trail criteria + 3 re-run pre-existing browser checks, zero bugs). Backend: 64/64 pytest tests passing (55 pre-existing + 3 new tscheck files covering manual backup run/list/download/path-traversal/RBAC, owner audit trail across 6 action types with ordering + RBAC, and the cron webhook auth/idempotency). Browser: new platform-backup-generates-and-logs check confirms KPIs/revenue/company table render, 'Gerar agora' adds a backup row and the matching BACKUP_MANUAL entry appears in the 'Minhas ações na plataforma' card with no console errors beyond the expected pre-login 401 probe; admin-full-workflow, seller-sale-and-return and seller-ui-restrictions re-ran clean confirming no regression in the company app.",
+  "checks": [
+    {
+      "criterion": "Automatic/manual database backup works for the platform owner",
+      "name": "test_tscheck_backup_run_and_download.py::test_owner_can_run_list_and_download_backup",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/platform/backups/run -> 200 {status: OK, size_bytes: 99284+, file: auto-<ts>.tar.gz}; GET /api/platform/backups -> 200, first row file matches the new one; GET /api/platform/backups/{file}/download -> 200, body starts with gzip magic bytes 1f 8b."
+    },
+    {
+      "criterion": "Automatic/manual database backup works for the platform owner (UI)",
+      "name": "platform-backup-generates-and-logs",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Logged in as owner, /plataforma renders platform-mrr/overdue/expected-mrr, platform-revenue-table and platform-orgs-table (regression); clicked platform-run-backup-button, platform-backups-list row count grew by 1, platform-logs-list first row shows BACKUP_MANUAL. Only console message was a 401 on the pre-login /auth/me probe. Screenshots: platform-loaded, backup-row-added, audit-log-shows-backup."
+    },
+    {
+      "criterion": "Backup download works and cannot be abused to read other files",
+      "name": "test_tscheck_backup_run_and_download.py::test_backup_download_blocks_path_traversal",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "GET /api/platform/backups/{..%2f..%2fetc%2fpasswd (plain and url-encoded)}/download -> 404 for both forms (backup_path() resolves to Path(name).name, rejecting traversal). Company ADMIN gets 403 on GET /api/platform/backups, POST /api/platform/backups/run and the download route (test_company_admin_forbidden_on_backup_routes); anonymous gets 401 (test_anonymous_forbidden_on_backup_routes)."
+    },
+    {
+      "criterion": "Platform owner audit trail records every owner action",
+      "name": "test_tscheck_platform_audit_trail.py::test_owner_actions_are_logged",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Using a throwaway signup org (never touching 'Minha Loja'): STATUS_APROVADA, PLANO_ALTERADO (INICIAL), EMPRESA_EDITADA, SENHA_ADMIN_REDEFINIDA, BACKUP_MANUAL and PRECOS_ALTERADOS each produced a matching GET /api/platform/logs row with correct actor_email/target/details; plan-price edit was reverted to the original values right after asserting the log row; GET /api/platform/logs?limit=10 returned created_at strictly non-increasing (newest first)."
+    },
+    {
+      "criterion": "Audit log and backup routes are owner-only",
+      "name": "test_tscheck_platform_audit_trail.py::test_logs_are_owner_only",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "Company ADMIN (leonardoroberto436@gmail.com) -> 403 on GET /api/platform/logs; a freshly-created OPERADOR (deleted at teardown via DELETE /api/users/{id}) -> 403 on the same route; anonymous client -> 401. Backup-route RBAC covered above in test_tscheck_backup_run_and_download.py."
+    },
+    {
+      "criterion": "Backup cron webhook is protected",
+      "name": "test_tscheck_cron_backup_webhook.py",
+      "lane": "backend",
+      "status": "passed",
+      "evidence": "POST /api/cron/backup with no Authorization -> 401; with a wrong Bearer token -> 401; with the real WEBHOOK_CRON_SECRET (read from backend/.env) + X-Webhook-Id -> 200 {status: accepted}; repeating the same X-Webhook-Id -> 200 {status: duplicate}."
+    },
+    {
+      "criterion": "No regression in the platform panel after these additions",
+      "name": "platform-backup-generates-and-logs (regression assertions) + admin-full-workflow",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Covered inside platform-backup-generates-and-logs (KPIs/revenue/company table visible) plus the full pre-existing admin-full-workflow re-run (product CRUD, stock entry, POS sale+receipt, monthly report) — both passed with 0 console errors beyond the known pre-login 401."
+    },
+    {
+      "criterion": "No regression in the company app",
+      "name": "seller-sale-and-return",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: OPERADOR dashboard/catalogue load, POS sale finalized with receipt, return created from an existing sale — no change in behavior."
+    },
+    {
+      "criterion": "No regression in the company app (OPERADOR blocked from writes)",
+      "name": "seller-ui-restrictions",
+      "lane": "browser",
+      "status": "passed",
+      "evidence": "Re-ran persisted check: nav-admin/nav-company absent, no create/edit/delete controls on /produtos or /estoque for OPERADOR — unchanged."
+    }
+  ]
+}

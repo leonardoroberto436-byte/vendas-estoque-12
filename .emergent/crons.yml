@@ -7,3 +7,11 @@ crons:
     endpoint: "{{BASE_URL}}/api/cron/subscription-reminders"
     method: POST
     enabled: true
+  - name: backup-diario
+    description: "Backup completo do banco (mongodump), mantém os 7 mais recentes"
+    cron: "0 6 * * *"
+    timezone: "America/Sao_Paulo"
+    # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
+    endpoint: "{{BASE_URL}}/api/cron/backup"
+    method: POST
+    enabled: true

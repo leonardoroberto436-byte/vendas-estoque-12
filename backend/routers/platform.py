@@ -14,7 +14,10 @@ from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from lib.auth import ROLE_ADMIN, hash_password, require
+from fastapi.responses import FileResponse
+
+from lib.auth import ROLE_ADMIN, Principal, hash_password, require
+from lib.backups import backup_path, log_platform_action, run_backup
 from lib.db import db
 from lib.email import send_org_approved
 from lib.subscriptions import (
@@ -26,6 +29,8 @@ from lib.subscriptions import (
 )
 from models.org import (
     DEFAULT_PLAN_PRICES,
+    BackupRecord,
+    PlatformLog,
     PLAN_LABELS,
     TRIAL_DAYS,
     OrgCreateRequest,
@@ -49,6 +54,10 @@ router = APIRouter(
     tags=["platform"],
     dependencies=[Depends(require("platform:manage"))],
 )
+
+
+# Quem está agindo — usado só para a trilha de auditoria do proprietário.
+_owner = require("platform:manage")
 
 
 def _aware(value):
@@ -95,7 +104,9 @@ def _generate_password() -> str:
 
 
 @router.post("/organizations", response_model=OrgCredentials, status_code=201)
-async def create_organization(payload: OrgCreateRequest):
+async def create_organization(
+    payload: OrgCreateRequest, principal: Principal = Depends(_owner)
+):
     """Owner registers a customer company and its ADMIN in one step.
 
     The company is born APROVADA (the owner is the one approving it) with its own
@@ -142,6 +153,12 @@ async def create_organization(payload: OrgCreateRequest):
         except HTTPException as exc:
             logger.warning("Welcome email não enviado para %s: %s", email, exc.detail)
 
+    await log_platform_action(
+        actor_email=principal.email,
+        action="EMPRESA_CRIADA",
+        target=org.name,
+        details=f"plano {org.plan} · admin {email}",
+    )
     created = await db.organizations.find_one({"id": org.id})
     return OrgCredentials(
         organization=await _to_view(created),
@@ -156,7 +173,9 @@ async def create_organization(payload: OrgCreateRequest):
 
 
 @router.put("/organizations/{org_id}", response_model=PlatformOrgView)
-async def update_organization(org_id: str, payload: OrgUpdateRequest):
+async def update_organization(
+    org_id: str, payload: OrgUpdateRequest, principal: Principal = Depends(_owner)
+):
     """Edit company name and responsible person. The admin login follows the e-mail."""
     org = await db.organizations.find_one({"id": org_id})
     if not org:
@@ -185,12 +204,18 @@ async def update_organization(org_id: str, payload: OrgUpdateRequest):
             {"$set": {"name": payload.owner_name.strip(), "email": email}},
         )
 
+    await log_platform_action(
+        actor_email=principal.email,
+        action="EMPRESA_EDITADA",
+        target=payload.name.strip(),
+        details=f"responsável {payload.owner_name.strip()} · {email}",
+    )
     updated = await db.organizations.find_one({"id": org_id})
     return await _to_view(updated)
 
 
 @router.post("/organizations/{org_id}/admin-password", response_model=OrgCredentials)
-async def reset_org_admin(org_id: str):
+async def reset_org_admin(org_id: str, principal: Principal = Depends(_owner)):
     """Generate a fresh password for the company's admin (creating the account if missing)."""
     org = await db.organizations.find_one({"id": org_id})
     if not org:
@@ -220,6 +245,12 @@ async def reset_org_admin(org_id: str):
         doc["password_hash"] = hash_password(password)
         await db.users.insert_one(doc)
 
+    await log_platform_action(
+        actor_email=principal.email,
+        action="SENHA_ADMIN_REDEFINIDA",
+        target=org.get("name", ""),
+        details=f"admin {email} · sessões encerradas",
+    )
     return OrgCredentials(
         organization=await _to_view(org),
         admin_email=email,
@@ -280,7 +311,9 @@ async def list_all_users():
 
 
 @router.put("/organizations/{org_id}/status", response_model=PlatformOrgView)
-async def set_org_status(org_id: str, payload: OrgStatusUpdate):
+async def set_org_status(
+    org_id: str, payload: OrgStatusUpdate, principal: Principal = Depends(_owner)
+):
     """Approve a pending signup, suspend an abusive/unpaid company, or reactivate it."""
     org = await db.organizations.find_one({"id": org_id})
     if not org:
@@ -317,12 +350,20 @@ async def set_org_status(org_id: str, payload: OrgStatusUpdate):
         except HTTPException as exc:
             logger.warning("Approval email não enviado para %s: %s", org["owner_email"], exc.detail)
 
+    await log_platform_action(
+        actor_email=principal.email,
+        action=f"STATUS_{payload.status}",
+        target=org.get("name", ""),
+        details=f"de {org.get('status')} para {payload.status}",
+    )
     updated = await db.organizations.find_one({"id": org_id})
     return await _to_view(updated)
 
 
 @router.put("/organizations/{org_id}/plan", response_model=PlatformOrgView)
-async def set_org_plan(org_id: str, payload: OrgPlanUpdate):
+async def set_org_plan(
+    org_id: str, payload: OrgPlanUpdate, principal: Principal = Depends(_owner)
+):
     """Plan + subscription state only. No charge is made here — billing comes later."""
     org = await db.organizations.find_one({"id": org_id})
     if not org:
@@ -345,6 +386,15 @@ async def set_org_plan(org_id: str, payload: OrgPlanUpdate):
         # a new due date starts a fresh reminder cycle
         changes["reminders_sent"] = []
     await db.organizations.update_one({"id": org_id}, {"$set": changes})
+    await log_platform_action(
+        actor_email=principal.email,
+        action="PLANO_ALTERADO",
+        target=org.get("name", ""),
+        details=(
+            f"{payload.plan} · assinatura {payload.subscription_status}"
+            f" · vencimento {payload.due_date or 'sem data'}"
+        ),
+    )
 
     if payload.subscription_status == "CANCELADO":
         members = await db.users.find({"org_id": org_id}, {"id": 1}).to_list(5000)
@@ -362,11 +412,20 @@ async def read_plan_prices():
 
 
 @router.put("/plan-prices", response_model=PlanPrices)
-async def write_plan_prices(payload: PlanPrices):
+async def write_plan_prices(
+    payload: PlanPrices, principal: Principal = Depends(_owner)
+):
     unknown = set(payload.prices) - set(DEFAULT_PLAN_PRICES)
     if unknown:
         raise HTTPException(status_code=400, detail=f"Plano desconhecido: {', '.join(unknown)}")
-    return PlanPrices(prices=await set_plan_prices(payload.prices))
+    prices = await set_plan_prices(payload.prices)
+    await log_platform_action(
+        actor_email=principal.email,
+        action="PRECOS_ALTERADOS",
+        target="planos",
+        details=" · ".join(f"{k} R$ {v:.2f}" for k, v in prices.items()),
+    )
+    return PlanPrices(prices=prices)
 
 
 @router.get("/revenue", response_model=PlatformRevenue)
@@ -417,3 +476,70 @@ async def platform_revenue():
 async def trigger_due_reminders():
     """Manual trigger for the daily reminder job — same code path as the cron."""
     return await run_due_reminders()
+
+
+# ------------------------------------------------- auditoria e backups
+@router.get("/logs", response_model=List[PlatformLog])
+async def platform_logs(limit: int = 200):
+    """Quem fez o quê na plataforma — ações do proprietário, mais recentes primeiro."""
+    docs = await db.platform_logs.find().sort("created_at", -1).to_list(min(limit, 500))
+    return [
+        PlatformLog(
+            id=d["id"],
+            actor_email=d.get("actor_email", ""),
+            action=d.get("action", ""),
+            target=d.get("target", ""),
+            details=d.get("details", ""),
+            created_at=_aware(d["created_at"]),
+        )
+        for d in docs
+    ]
+
+
+@router.get("/backups", response_model=List[BackupRecord])
+async def list_backups(limit: int = 30):
+    docs = await db.backups.find().sort("created_at", -1).to_list(min(limit, 100))
+    return [
+        BackupRecord(
+            id=d["id"],
+            file=d.get("file", ""),
+            size_bytes=d.get("size_bytes", 0),
+            status=d.get("status", ""),
+            error=d.get("error", ""),
+            created_at=_aware(d["created_at"]),
+        )
+        for d in docs
+    ]
+
+
+@router.post("/backups/run", response_model=BackupRecord)
+async def create_backup(principal: Principal = Depends(_owner)):
+    """Backup manual — mesmo caminho do backup automático diário."""
+    result = await run_backup()
+    await log_platform_action(
+        actor_email=principal.email,
+        action="BACKUP_MANUAL",
+        target=result.get("file", ""),
+        details=result.get("status", ""),
+    )
+    doc = await db.backups.find_one(sort=[("created_at", -1)])
+    if not doc:
+        raise HTTPException(status_code=500, detail="Backup não registrado")
+    return BackupRecord(
+        id=doc["id"],
+        file=doc.get("file", ""),
+        size_bytes=doc.get("size_bytes", 0),
+        status=doc.get("status", ""),
+        error=doc.get("error", ""),
+        created_at=_aware(doc["created_at"]),
+    )
+
+
+@router.get("/backups/{file_name}/download")
+async def download_backup(file_name: str):
+    """Baixa o arquivo para guarda fora do servidor."""
+    try:
+        path = backup_path(file_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado")
+    return FileResponse(path, media_type="application/gzip", filename=path.name)

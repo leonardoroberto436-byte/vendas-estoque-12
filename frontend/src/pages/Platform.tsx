@@ -13,6 +13,9 @@ import {
   RotateCcw,
   Save,
   Send,
+  DatabaseBackup,
+  Download,
+  ScrollText,
   TrendingUp,
   ShieldCheck,
   Users,
@@ -21,7 +24,9 @@ import { toast } from "sonner";
 import { apiGet, apiPost, apiPut } from "@/lib/api";
 import type {
   OrgCredentials,
+  BackupRecord,
   PlanPrices,
+  PlatformLog,
   PlatformRevenue,
   Plan,
   PlatformOrgView,
@@ -115,6 +120,16 @@ export default function Platform() {
     queryFn: () => apiGet<PlanPrices>("/platform/plan-prices"),
     refetchOnWindowFocus: false,
   });
+  const { data: logData } = useQuery({
+    queryKey: ["platform-logs"],
+    queryFn: () => apiGet<PlatformLog[]>("/platform/logs?limit=50"),
+    refetchOnWindowFocus: false,
+  });
+  const { data: backupData } = useQuery({
+    queryKey: ["platform-backups"],
+    queryFn: () => apiGet<BackupRecord[]>("/platform/backups"),
+    refetchOnWindowFocus: false,
+  });
   const { data: userData } = useQuery({
     queryKey: ["platform-users"],
     queryFn: () => apiGet<PlatformUserView[]>("/platform/users"),
@@ -129,6 +144,7 @@ export default function Platform() {
     void queryClient.invalidateQueries({ queryKey: ["platform-orgs"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-users"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-revenue"] });
+    void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
   };
 
   const createOrg = useMutation({
@@ -192,8 +208,23 @@ export default function Platform() {
       toast.success("Preços dos planos atualizados");
       void queryClient.invalidateQueries({ queryKey: ["platform-plan-prices"] });
       void queryClient.invalidateQueries({ queryKey: ["platform-revenue"] });
+    void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
     },
     onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar os preços")),
+  });
+
+  const runBackup = useMutation({
+    mutationFn: () => apiPost<BackupRecord>("/platform/backups/run"),
+    onSuccess: (result) => {
+      if (result.status === "OK") {
+        toast.success(`Backup criado: ${result.file}`);
+      } else {
+        toast.error(`Backup falhou: ${result.error}`);
+      }
+      void queryClient.invalidateQueries({ queryKey: ["platform-backups"] });
+      void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível gerar o backup")),
   });
 
   const sendReminders = useMutation({
@@ -767,6 +798,103 @@ export default function Platform() {
           status aqui só muda o acesso: <em>cancelado</em> bloqueia o login da empresa,{" "}
           <em>inadimplente</em> apenas sinaliza e mantém o acesso.
         </p>
+        <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <Card className="border-white/10 bg-slate-900 shadow-none">
+            <CardHeader className="flex flex-row items-center justify-between gap-4">
+              <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-white">
+                <DatabaseBackup className="size-4 text-teal-400" />
+                Backups do banco
+              </CardTitle>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                data-testid="platform-run-backup-button"
+                disabled={runBackup.isPending}
+                onClick={() => runBackup.mutate()}
+              >
+                <DatabaseBackup className="size-4" />
+                {runBackup.isPending ? "Gerando..." : "Gerar agora"}
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <p className="mb-3 text-xs text-slate-400">
+                Automático todo dia às 6h (horário de Brasília). Mantemos os 7 mais recentes.
+                Baixe e guarde fora do servidor.
+              </p>
+              <div className="space-y-2" data-testid="platform-backups-list">
+                {(backupData ?? []).length === 0 && (
+                  <p className="py-6 text-center text-sm text-slate-400">
+                    Nenhum backup registrado ainda.
+                  </p>
+                )}
+                {(backupData ?? []).map((backup) => (
+                  <div
+                    key={backup.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2"
+                    data-testid={`platform-backup-row-${backup.id}`}
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate font-mono text-xs text-slate-200">{backup.file}</p>
+                      <p className="text-[11px] text-slate-400">
+                        {formatDateTime(backup.created_at)} ·{" "}
+                        {backup.status === "OK"
+                          ? `${(backup.size_bytes / 1024).toFixed(0)} KB`
+                          : `falhou — ${backup.error}`}
+                      </p>
+                    </div>
+                    {backup.status === "OK" && (
+                      <a
+                        href={`/api/platform/backups/${backup.file}/download`}
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/20 px-2 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-white/10"
+                        data-testid={`platform-backup-download-${backup.id}`}
+                      >
+                        <Download className="size-3.5" />
+                        Baixar
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-white/10 bg-slate-900 shadow-none">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-white">
+                <ScrollText className="size-4 text-teal-400" />
+                Minhas ações na plataforma
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="max-h-[420px] space-y-2 overflow-y-auto" data-testid="platform-logs-list">
+                {(logData ?? []).length === 0 && (
+                  <p className="py-6 text-center text-sm text-slate-400">
+                    Nenhuma ação registrada ainda.
+                  </p>
+                )}
+                {(logData ?? []).map((log) => (
+                  <div
+                    key={log.id}
+                    className="rounded-lg border border-white/10 bg-slate-800/60 px-3 py-2"
+                    data-testid={`platform-log-row-${log.id}`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-[11px] font-semibold uppercase tracking-wider text-teal-400">
+                        {log.action}
+                      </span>
+                      <span className="shrink-0 font-mono text-[11px] tabular-nums text-slate-400">
+                        {formatDateTime(log.created_at)}
+                      </span>
+                    </div>
+                    <p className="text-sm font-semibold text-white">{log.target}</p>
+                    <p className="text-xs text-slate-400">{log.details}</p>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </main>
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>

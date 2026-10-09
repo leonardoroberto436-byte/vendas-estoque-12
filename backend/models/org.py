@@ -204,3 +204,23 @@ class ForgotPasswordRequest(BaseModel):
 class ResetPasswordRequest(BaseModel):
     token: str = Field(min_length=10, max_length=200)
     password: str = Field(min_length=8, max_length=128)
+
+
+class PlatformLog(BaseModel):
+    """Trilha de auditoria das ações do proprietário da plataforma."""
+
+    id: str
+    actor_email: str
+    action: str
+    target: str = ""
+    details: str = ""
+    created_at: datetime
+
+
+class BackupRecord(BaseModel):
+    id: str
+    file: str
+    size_bytes: int
+    status: str
+    error: str = ""
+    created_at: datetime

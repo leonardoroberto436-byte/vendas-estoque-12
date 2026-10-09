@@ -1,23 +1,39 @@
+import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Ban,
   Building2,
   CheckCircle2,
   Clock,
+  Copy,
+  KeyRound,
   LogOut,
+  Pencil,
+  Plus,
   RotateCcw,
   ShieldCheck,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiPut } from "@/lib/api";
+import { apiGet, apiPost, apiPut } from "@/lib/api";
 import type {
+  OrgCredentials,
   Plan,
   PlatformOrgView,
   PlatformStats,
   PlatformUserView,
   SubscriptionStatus,
 } from "@/lib/types";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   ORG_STATUS_CLASSES,
   ORG_STATUS_LABELS,
@@ -52,9 +68,23 @@ import {
 const PLANS: Plan[] = ["TESTE", "BASICO", "PROFISSIONAL"];
 const SUBSCRIPTIONS: SubscriptionStatus[] = ["TESTE", "ATIVO", "INADIMPLENTE", "CANCELADO"];
 
+const EMPTY_FORM = {
+  company_name: "",
+  owner_name: "",
+  owner_email: "",
+  plan: "TESTE" as Plan,
+  subscription_status: "TESTE" as SubscriptionStatus,
+  send_email: true,
+};
+
 export default function Platform() {
   const queryClient = useQueryClient();
   const { user } = useCurrentUser();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editing, setEditing] = useState<PlatformOrgView | null>(null);
+  const [editForm, setEditForm] = useState({ name: "", owner_name: "", owner_email: "" });
+  const [credentials, setCredentials] = useState<OrgCredentials | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ["platform-stats"],
@@ -80,6 +110,52 @@ export default function Platform() {
     void queryClient.invalidateQueries({ queryKey: ["platform-orgs"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-users"] });
   };
+
+  const createOrg = useMutation({
+    mutationFn: () =>
+      apiPost<OrgCredentials>("/platform/organizations", {
+        company_name: form.company_name.trim(),
+        owner_name: form.owner_name.trim(),
+        owner_email: form.owner_email.trim(),
+        plan: form.plan,
+        subscription_status: form.subscription_status,
+        send_email: form.send_email,
+      }),
+    onSuccess: (result) => {
+      setCreateOpen(false);
+      setForm(EMPTY_FORM);
+      setCredentials(result);
+      toast.success(`${result.organization.name} criada e liberada`);
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível criar a empresa")),
+  });
+
+  const updateOrg = useMutation({
+    mutationFn: (payload: { id: string; name: string; owner_name: string; owner_email: string }) =>
+      apiPut<PlatformOrgView>(`/platform/organizations/${payload.id}`, {
+        name: payload.name.trim(),
+        owner_name: payload.owner_name.trim(),
+        owner_email: payload.owner_email.trim(),
+      }),
+    onSuccess: (org) => {
+      setEditing(null);
+      toast.success(`${org.name} atualizada`);
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar os dados")),
+  });
+
+  const resetAdmin = useMutation({
+    mutationFn: (id: string) =>
+      apiPost<OrgCredentials>(`/platform/organizations/${id}/admin-password`),
+    onSuccess: (result) => {
+      setCredentials(result);
+      toast.success("Nova senha gerada");
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível redefinir o acesso")),
+  });
 
   const setStatus = useMutation({
     mutationFn: ({ id, status }: { id: string; status: string }) =>
@@ -178,10 +254,21 @@ export default function Platform() {
         </div>
 
         <Card className="border-white/10 bg-slate-900 shadow-none">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
             <CardTitle className="text-base font-bold tracking-tight text-white">
               Empresas cadastradas
             </CardTitle>
+            <Button
+              size="sm"
+              data-testid="platform-new-org-button"
+              onClick={() => {
+                setForm(EMPTY_FORM);
+                setCreateOpen(true);
+              }}
+            >
+              <Plus className="size-4" />
+              Nova Empresa
+            </Button>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -287,6 +374,32 @@ export default function Platform() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="Editar dados da empresa"
+                            data-testid={`platform-org-edit-btn-${org.id}`}
+                            onClick={() => {
+                              setEditing(org);
+                              setEditForm({
+                                name: org.name,
+                                owner_name: org.owner_name,
+                                owner_email: org.owner_email,
+                              });
+                            }}
+                          >
+                            <Pencil className="size-4 text-slate-300" />
+                          </Button>
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label="Redefinir acesso do administrador"
+                            data-testid={`platform-org-reset-admin-btn-${org.id}`}
+                            disabled={resetAdmin.isPending}
+                            onClick={() => resetAdmin.mutate(org.id)}
+                          >
+                            <KeyRound className="size-4 text-amber-400" />
+                          </Button>
                           {org.status !== "APROVADA" && (
                             <Button
                               size="sm"
@@ -405,6 +518,225 @@ export default function Platform() {
           <em>inadimplente</em> apenas sinaliza e mantém o acesso.
         </p>
       </main>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-lg" data-testid="platform-create-org-dialog">
+          <DialogHeader>
+            <DialogTitle>Nova empresa cliente</DialogTitle>
+            <DialogDescription>
+              A empresa já nasce liberada com o workspace próprio e isolado. A senha do
+              administrador é gerada automaticamente e exibida uma única vez.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              createOrg.mutate();
+            }}
+          >
+            <div className="grid gap-2">
+              <Label htmlFor="org-company">Nome da empresa</Label>
+              <Input
+                id="org-company"
+                required
+                minLength={2}
+                data-testid="platform-create-company-input"
+                value={form.company_name}
+                onChange={(e) => setForm({ ...form, company_name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="org-owner">Responsável (administrador)</Label>
+              <Input
+                id="org-owner"
+                required
+                minLength={2}
+                data-testid="platform-create-owner-input"
+                value={form.owner_name}
+                onChange={(e) => setForm({ ...form, owner_name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="org-email">E-mail de acesso</Label>
+              <Input
+                id="org-email"
+                type="email"
+                required
+                data-testid="platform-create-email-input"
+                value={form.owner_email}
+                onChange={(e) => setForm({ ...form, owner_email: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Plano</Label>
+                <Select
+                  value={form.plan}
+                  onValueChange={(value: string) => setForm({ ...form, plan: value as Plan })}
+                >
+                  <SelectTrigger data-testid="platform-create-plan-select">
+                    <SelectValue>{(value) => PLAN_LABELS[value as Plan]}</SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {PLANS.map((plan) => (
+                      <SelectItem key={plan} value={plan}>
+                        {PLAN_LABELS[plan]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label>Assinatura</Label>
+                <Select
+                  value={form.subscription_status}
+                  onValueChange={(value: string) =>
+                    setForm({ ...form, subscription_status: value as SubscriptionStatus })
+                  }
+                >
+                  <SelectTrigger data-testid="platform-create-subscription-select">
+                    <SelectValue>
+                      {(value) => SUBSCRIPTION_LABELS[value as SubscriptionStatus]}
+                    </SelectValue>
+                  </SelectTrigger>
+                  <SelectContent>
+                    {SUBSCRIPTIONS.map((status) => (
+                      <SelectItem key={status} value={status}>
+                        {SUBSCRIPTION_LABELS[status]}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={createOrg.isPending}
+                data-testid="platform-create-submit-button"
+              >
+                {createOrg.isPending ? "Criando..." : "Criar e liberar acesso"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="sm:max-w-lg" data-testid="platform-edit-org-dialog">
+          <DialogHeader>
+            <DialogTitle>Editar empresa</DialogTitle>
+            <DialogDescription>
+              Alterar o e-mail aqui também muda o login do administrador da empresa.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            className="grid gap-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (editing) updateOrg.mutate({ id: editing.id, ...editForm });
+            }}
+          >
+            <div className="grid gap-2">
+              <Label htmlFor="edit-name">Nome da empresa</Label>
+              <Input
+                id="edit-name"
+                required
+                minLength={2}
+                data-testid="platform-edit-company-input"
+                value={editForm.name}
+                onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-owner">Responsável</Label>
+              <Input
+                id="edit-owner"
+                required
+                minLength={2}
+                data-testid="platform-edit-owner-input"
+                value={editForm.owner_name}
+                onChange={(e) => setEditForm({ ...editForm, owner_name: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="edit-email">E-mail de acesso</Label>
+              <Input
+                id="edit-email"
+                type="email"
+                required
+                data-testid="platform-edit-email-input"
+                value={editForm.owner_email}
+                onChange={(e) => setEditForm({ ...editForm, owner_email: e.target.value })}
+              />
+            </div>
+            <DialogFooter>
+              <Button
+                type="submit"
+                disabled={updateOrg.isPending}
+                data-testid="platform-edit-submit-button"
+              >
+                {updateOrg.isPending ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={credentials !== null}
+        onOpenChange={(open) => !open && setCredentials(null)}
+      >
+        <DialogContent className="sm:max-w-md" data-testid="platform-credentials-dialog">
+          <DialogHeader>
+            <DialogTitle>Acesso da empresa</DialogTitle>
+            <DialogDescription>{credentials?.message}</DialogDescription>
+          </DialogHeader>
+          {credentials && (
+            <div className="grid gap-3">
+              <div className="rounded-lg border bg-muted/40 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Empresa
+                </p>
+                <p className="font-semibold" data-testid="platform-credentials-org">
+                  {credentials.organization.name}
+                </p>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  E-mail
+                </p>
+                <p className="font-mono text-sm" data-testid="platform-credentials-email">
+                  {credentials.admin_email}
+                </p>
+                <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Senha
+                </p>
+                <p className="font-mono text-lg font-semibold" data-testid="platform-credentials-password">
+                  {credentials.admin_password}
+                </p>
+              </div>
+              <Button
+                variant="outline"
+                data-testid="platform-credentials-copy-button"
+                onClick={() => {
+                  void navigator.clipboard?.writeText(
+                    `Acesso ${credentials.organization.name}\nE-mail: ${credentials.admin_email}\nSenha: ${credentials.admin_password}`
+                  );
+                  toast.success("Acesso copiado");
+                }}
+              >
+                <Copy className="size-4" />
+                Copiar acesso
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                {credentials.email_sent
+                  ? "Um e-mail de boas-vindas foi enviado ao responsável."
+                  : "Repasse estes dados ao cliente — a senha não é exibida novamente."}
+              </p>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
       <Toaster richColors />
     </div>
   );

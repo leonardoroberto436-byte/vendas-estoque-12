@@ -52,6 +52,29 @@ export interface PlatformStats {
   recent_orgs: PlatformOrgView[];
 }
 
+export interface OrgCreateRequest {
+  company_name: string;
+  owner_name: string;
+  owner_email: string;
+  plan: Plan;
+  subscription_status: SubscriptionStatus;
+  send_email: boolean;
+}
+
+export interface OrgUpdateRequest {
+  name: string;
+  owner_name: string;
+  owner_email: string;
+}
+
+export interface OrgCredentials {
+  organization: PlatformOrgView;
+  admin_email: string;
+  admin_password: string;
+  email_sent: boolean;
+  message: string;
+}
+
 export interface SignupRequest {
   name: string;
   company_name: string;

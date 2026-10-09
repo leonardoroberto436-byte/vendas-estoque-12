@@ -93,6 +93,35 @@ class OrgStatusUpdate(BaseModel):
     status: OrgStatus
 
 
+class OrgCreateRequest(BaseModel):
+    """Platform owner creates a customer company + its first ADMIN in one step."""
+
+    company_name: str = Field(min_length=2, max_length=120)
+    owner_name: str = Field(min_length=2, max_length=80)
+    owner_email: EmailStr
+    plan: Plan = "TESTE"
+    subscription_status: SubscriptionStatus = "TESTE"
+    send_email: bool = True
+
+
+class OrgUpdateRequest(BaseModel):
+    """Edit company identification. The admin login e-mail follows owner_email."""
+
+    name: str = Field(min_length=2, max_length=120)
+    owner_name: str = Field(min_length=2, max_length=80)
+    owner_email: EmailStr
+
+
+class OrgCredentials(BaseModel):
+    """Returned once, right after creating a company or resetting its admin."""
+
+    organization: PlatformOrgView
+    admin_email: str
+    admin_password: str
+    email_sent: bool
+    message: str
+
+
 class OrgPlanUpdate(BaseModel):
     plan: Plan
     subscription_status: SubscriptionStatus

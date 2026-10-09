@@ -8,23 +8,29 @@ This is also the only module allowed to read across organizations.
 """
 
 import logging
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from lib.auth import require
+from lib.auth import ROLE_ADMIN, hash_password, require
 from lib.db import db
 from lib.email import send_org_approved
 from models.org import (
     PLAN_LABELS,
     TRIAL_DAYS,
+    OrgCreateRequest,
+    OrgCredentials,
     OrgPlanUpdate,
     OrgStatusUpdate,
+    OrgUpdateRequest,
+    Organization,
     PlatformOrgView,
     PlatformStats,
     PlatformUserView,
 )
+from models.users import User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(
@@ -66,6 +72,147 @@ async def _to_view(org: dict) -> PlatformOrgView:
         product_count=await db.products.count_documents(org_filter),
         sales_count=await db.sales.count_documents(org_filter),
         last_activity_at=_aware(last_sale["created_at"]) if last_sale else None,
+    )
+
+
+def _generate_password() -> str:
+    """Readable temporary password — shown once to the owner, never stored in clear."""
+    alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"
+    return "".join(secrets.choice(alphabet) for _ in range(10)) + "@2026"
+
+
+@router.post("/organizations", response_model=OrgCredentials, status_code=201)
+async def create_organization(payload: OrgCreateRequest):
+    """Owner registers a customer company and its ADMIN in one step.
+
+    The company is born APROVADA (the owner is the one approving it) with its own
+    org_id, so every row it creates from now on lives in an isolated workspace.
+    """
+    email = payload.owner_email.strip().lower()
+    if await db.users.find_one({"email": email}):
+        raise HTTPException(status_code=409, detail="Já existe uma conta com este e-mail.")
+    if await db.organizations.find_one({"name": payload.company_name.strip()}):
+        raise HTTPException(status_code=409, detail="Já existe uma empresa com este nome.")
+
+    now = datetime.now(timezone.utc)
+    org = Organization(
+        name=payload.company_name.strip(),
+        owner_name=payload.owner_name.strip(),
+        owner_email=email,
+        status="APROVADA",
+        plan=payload.plan,
+        subscription_status=payload.subscription_status,
+        trial_ends_at=now + timedelta(days=TRIAL_DAYS) if payload.plan == "TESTE" else None,
+        approved_at=now,
+    )
+    await db.organizations.insert_one(org.model_dump())
+
+    password = _generate_password()
+    admin = User(
+        name=payload.owner_name.strip(),
+        email=email,
+        role=ROLE_ADMIN,
+        org_id=org.id,
+        is_active=True,
+    )
+    doc = admin.model_dump()
+    doc["password_hash"] = hash_password(password)
+    await db.users.insert_one(doc)
+
+    email_sent = False
+    if payload.send_email:
+        try:
+            await send_org_approved(
+                to=email, name=admin.name, company=org.name, trial_days=TRIAL_DAYS
+            )
+            email_sent = True
+        except HTTPException as exc:
+            logger.warning("Welcome email não enviado para %s: %s", email, exc.detail)
+
+    created = await db.organizations.find_one({"id": org.id})
+    return OrgCredentials(
+        organization=await _to_view(created),
+        admin_email=email,
+        admin_password=password,
+        email_sent=email_sent,
+        message=(
+            "Empresa criada e liberada. Repasse o e-mail e a senha abaixo ao cliente — "
+            "esta senha só aparece agora."
+        ),
+    )
+
+
+@router.put("/organizations/{org_id}", response_model=PlatformOrgView)
+async def update_organization(org_id: str, payload: OrgUpdateRequest):
+    """Edit company name and responsible person. The admin login follows the e-mail."""
+    org = await db.organizations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    email = payload.owner_email.strip().lower()
+    clash = await db.users.find_one({"email": email, "org_id": {"$ne": org_id}})
+    if clash:
+        raise HTTPException(status_code=409, detail="Este e-mail já é usado por outra conta.")
+
+    await db.organizations.update_one(
+        {"id": org_id},
+        {
+            "$set": {
+                "name": payload.name.strip(),
+                "owner_name": payload.owner_name.strip(),
+                "owner_email": email,
+            }
+        },
+    )
+    # keep the company's admin account in sync with the responsible person
+    admin = await db.users.find_one({"org_id": org_id, "email": org.get("owner_email", "")})
+    if admin:
+        await db.users.update_one(
+            {"id": admin["id"]},
+            {"$set": {"name": payload.owner_name.strip(), "email": email}},
+        )
+
+    updated = await db.organizations.find_one({"id": org_id})
+    return await _to_view(updated)
+
+
+@router.post("/organizations/{org_id}/admin-password", response_model=OrgCredentials)
+async def reset_org_admin(org_id: str):
+    """Generate a fresh password for the company's admin (creating the account if missing)."""
+    org = await db.organizations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+
+    email = (org.get("owner_email") or "").strip().lower()
+    if not email:
+        raise HTTPException(status_code=400, detail="Empresa sem e-mail de responsável.")
+
+    password = _generate_password()
+    admin = await db.users.find_one({"org_id": org_id, "email": email})
+    if admin:
+        await db.users.update_one(
+            {"id": admin["id"]},
+            {"$set": {"password_hash": hash_password(password), "is_active": True}},
+        )
+        await db.sessions.delete_many({"user_id": admin["id"]})
+    else:
+        new_admin = User(
+            name=org.get("owner_name", "Administrador"),
+            email=email,
+            role=ROLE_ADMIN,
+            org_id=org_id,
+            is_active=True,
+        )
+        doc = new_admin.model_dump()
+        doc["password_hash"] = hash_password(password)
+        await db.users.insert_one(doc)
+
+    return OrgCredentials(
+        organization=await _to_view(org),
+        admin_email=email,
+        admin_password=password,
+        email_sent=False,
+        message="Nova senha gerada. As sessões anteriores desse administrador foram encerradas.",
     )
 
 

@@ -48,7 +48,7 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 | `/cadastro` | Cadastro público de empresa (pública) |
 | `/esqueci-senha` · `/redefinir-senha` | Recuperação de senha por e-mail (pública) |
 | `/devolucoes` | Painel de Devoluções — estorno por item, repõe estoque, ajusta faturamento líquido |
-| `/plataforma` | Painel da Plataforma (**só PLATFORM_OWNER**) |
+| `/plataforma` | Painel da Plataforma (**só PLATFORM_OWNER**) — KPIs, **Nova Empresa** (cria empresa + admin e mostra a senha gerada), editar dados, redefinir acesso do admin, liberar/suspender/reativar, plano e assinatura |
 | `/` | Visão Geral — KPIs do dia, seletor de **7/15/30 dias** (faturamento, devoluções, líquido, ticket médio), gráficos, **vendas por vendedor**, alertas |
 | `/vender` | Venda Balcão — carrinho, desconto, pagamento, finalizar; **cupom com vendedor e data, botão Imprimir (80mm) e Enviar no WhatsApp** |
 | `/vendas` | Histórico de Vendas + modal de detalhe |
@@ -63,7 +63,7 @@ FastAPI + MongoDB (motor) · Vite + React 19 + Tailwind v4 + shadcn/ui · TanSta
 Todas as rotas abaixo exigem sessão válida (401 sem cookie), exceto `/api/auth/login`.
 - `POST /api/auth/signup` (pública) · `POST /api/auth/login` (pública) · `POST /api/auth/forgot-password` (pública) · `POST /api/auth/reset-password` (pública)
 - `POST /api/auth/logout` · `GET /api/auth/me` · `POST /api/auth/change-password`
-- `GET /api/platform/stats|organizations|users` · `PUT /api/platform/organizations/{id}/status|plan` — **PLATFORM_OWNER only**
+- `GET /api/platform/stats|organizations|users` · `POST /api/platform/organizations` (cria empresa APROVADA + usuário ADMIN, devolve a senha gerada uma única vez) · `PUT /api/platform/organizations/{id}` (nome/responsável/e-mail — o login do admin acompanha o e-mail) · `PUT /api/platform/organizations/{id}/status|plan` · `POST /api/platform/organizations/{id}/admin-password` (gera nova senha e derruba as sessões do admin) — **PLATFORM_OWNER only**
 - `GET /api/returns` · `GET /api/returns/returnable` · `POST /api/returns`
 - `GET /api/dashboard/stats?days=7|15|30`
 - `GET/POST /api/users` · `PUT /api/users/{id}` · `PUT /api/users/{id}/password` · `DELETE /api/users/{id}` · `GET /api/users/access-logs` — **ADMIN only (403 para operador)**

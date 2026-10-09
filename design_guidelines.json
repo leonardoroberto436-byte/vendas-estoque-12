@@ -1,0 +1,302 @@
+{
+  "theme": "light",
+  "theme_strategy": "Light mode primary for day-to-day point of sale and warehouse retail inventory management. Clean, crisp paper-white and slate backgrounds with warm emerald/forest green primary accents signaling commerce, sales velocity, and positive stock health, complemented by amber for low stock warnings and signal red for critical stockouts.",
+  "colors": {
+    "surfaces": [
+      {
+        "name": "page",
+        "kind": "solid",
+        "bg": "#F8FAFC",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "link": "#0F766E",
+          "error": "#DC2626",
+          "success": "#16A34A",
+          "warning": "#D97706"
+        }
+      },
+      {
+        "name": "panel",
+        "kind": "solid",
+        "bg": "#FFFFFF",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#64748B",
+        "roles": {
+          "border": "#E2E8F0",
+          "hover_bg": "#F1F5F9",
+          "active_bg": "#E2E8F0"
+        }
+      },
+      {
+        "name": "panel_secondary",
+        "kind": "solid",
+        "bg": "#F1F5F9",
+        "on_bg": "#0F172A",
+        "on_bg_muted": "#475569"
+      },
+      {
+        "name": "inverse",
+        "kind": "solid",
+        "bg": "#0F172A",
+        "on_bg": "#F8FAFC",
+        "on_bg_muted": "#94A3B8",
+        "roles": {
+          "badge_bg": "#1E293B",
+          "highlight": "#34D399"
+        }
+      },
+      {
+        "name": "pos_cart",
+        "kind": "solid",
+        "bg": "#F0FDF4",
+        "on_bg": "#14532D",
+        "on_bg_muted": "#166534",
+        "roles": {
+          "total_highlight": "#15803D"
+        }
+      },
+      {
+        "name": "alert_low_stock",
+        "kind": "solid",
+        "bg": "#FEF3C7",
+        "on_bg": "#78350F",
+        "on_bg_muted": "#92400E"
+      },
+      {
+        "name": "alert_critical",
+        "kind": "solid",
+        "bg": "#FEE2E2",
+        "on_bg": "#7F1D1D",
+        "on_bg_muted": "#991B1B"
+      }
+    ],
+    "accent": "#0D9488",
+    "on_accent": "#FFFFFF",
+    "brand": {
+      "primary": "#0D9488",
+      "primary_hover": "#0F766E",
+      "primary_dark": "#115E59",
+      "secondary": "#0284C7",
+      "success": "#16A34A",
+      "warning": "#D97706",
+      "danger": "#DC2626",
+      "neutral_border": "#CBD5E1"
+    }
+  },
+  "typography": {
+    "font_family_heading": "'Plus Jakarta Sans', sans-serif",
+    "font_family_body": "'Plus Jakarta Sans', sans-serif",
+    "font_family_mono": "'JetBrains Mono', monospace",
+    "font_import": "@import \"@fontsource-variable/plus-jakarta-sans\";\n@import \"@fontsource-variable/jetbrains-mono\";",
+    "scale_px": {
+      "display": 48,
+      "h1": 36,
+      "h2": 28,
+      "h3": 20,
+      "body": 16,
+      "caption": 14
+    },
+    "rules": {
+      "headings": "font-bold tracking-tight text-slate-900",
+      "subheadings": "font-medium text-slate-500",
+      "numbers_monetary": "font-mono font-semibold tracking-tight tabular-nums",
+      "sku_code": "font-mono text-xs uppercase tracking-wider text-slate-600 bg-slate-100 px-2 py-0.5 rounded",
+      "labels": "text-xs font-semibold uppercase tracking-wider text-slate-500"
+    }
+  },
+  "entry_surfaces": {
+    "/": "Overview dashboard — top KPI summary bar with today's revenue, sales count, low stock alert counter, split view with sales/revenue chart left and quick counter sale + critical alerts right"
+  },
+  "visual_enhancers": {
+    "card_style": "bg-white border border-slate-200/90 rounded-xl shadow-xs transition-shadow hover:shadow-sm",
+    "active_card_style": "border-teal-500 ring-1 ring-teal-500/20",
+    "dense_table_style": "divide-y divide-slate-100 text-sm [&_th]:bg-slate-50 [&_th]:text-slate-600 [&_th]:font-semibold [&_td]:py-3.5",
+    "kpi_badge_style": "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium"
+  },
+  "layouts": {
+    "navigation": {
+      "type": "topbar_with_tabs",
+      "title": "Estoque & Vendas Pro",
+      "items": [
+        { "id": "dashboard", "label": "Visão Geral", "icon": "LayoutDashboard", "testId": "nav-dashboard" },
+        { "id": "vendas", "label": "Vender (Balcão)", "icon": "ShoppingCart", "testId": "nav-sales-pos" },
+        { "id": "historico_vendas", "label": "Histórico de Vendas", "icon": "Receipt", "testId": "nav-sales-history" },
+        { "id": "produtos", "label": "Catálogo de Produtos", "icon": "Package", "testId": "nav-products" },
+        { "id": "estoque", "label": "Movimentações de Estoque", "icon": "ArrowLeftRight", "testId": "nav-stock" },
+        { "id": "alertas", "label": "Alertas de Reposição", "icon": "AlertTriangle", "testId": "nav-alerts" }
+      ],
+      "quick_actions": [
+        { "label": "+ Nova Venda", "action": "open_pos", "testId": "btn-quick-new-sale", "variant": "default" },
+        { "label": "+ Entrada de Estoque", "action": "open_stock_entry", "testId": "btn-quick-stock-in", "variant": "outline" },
+        { "label": "+ Novo Produto", "action": "open_product_modal", "testId": "btn-quick-new-product", "variant": "secondary" }
+      ]
+    },
+    "grid_structure": {
+      "dashboard_kpis": "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6",
+      "pos_layout": "grid grid-cols-1 lg:grid-cols-12 gap-6",
+      "pos_catalog_col": "lg:col-span-7 xl:col-span-8",
+      "pos_cart_col": "lg:col-span-5 xl:col-span-4"
+    }
+  },
+  "component_structure": {
+    "pages": [
+      {
+        "path": "frontend/src/pages/Home.tsx",
+        "description": "Main orchestrator hosting tabbed views: Dashboard (KPIs + charts + alerts), POS Counter Sale (Venda Balcão), Products CRUD Table, Stock Movement & Adjustments (Entrada/Saída), and Sales History modal/drawer."
+      }
+    ],
+    "components": [
+      {
+        "name": "DashboardView",
+        "path": "frontend/src/components/dashboard/DashboardView.tsx",
+        "description": "KPI cards (Vendas Hoje, Faturamento Hoje, Produtos em Alerta, Estoque Total em R$), Recharts daily revenue line/bar chart, Top 5 selling products bar, Low stock critical notification panel."
+      },
+      {
+        "name": "PointOfSale",
+        "path": "frontend/src/components/pos/PointOfSale.tsx",
+        "description": "Counter sales interface: searchable product cards with instant quantity steppers, live stock limit validation (blocks exceeding available stock), shopping cart with subtotal calculation, discount/payment method selector (Dinheiro, PIX, Cartão Débito, Cartão Crédito), and 1-click finalize receipt modal."
+      },
+      {
+        "name": "ProductManagement",
+        "path": "frontend/src/components/products/ProductManagement.tsx",
+        "description": "Products table with search by Name/SKU, category filter, stock status pill badges, modal to create/edit product with automatic margin calculation (Margem de Lucro = ((Preço Venda - Custo)/Preço Venda)*100), and delete confirmation dialog."
+      },
+      {
+        "name": "StockControl",
+        "path": "frontend/src/components/stock/StockControl.tsx",
+        "description": "Stock management interface: 'Nova Entrada de Estoque' (supply replenishment) and 'Ajuste Manual de Inventário' with reason notes (Quebra, Validade, Contagem, Devolução), plus complete chronological movements ledger table."
+      },
+      {
+        "name": "SalesHistory",
+        "path": "frontend/src/components/sales/SalesHistory.tsx",
+        "description": "Historical sales list with date filters, total items, payment method, formatted Brazilian Real totals (R$), and expandable detail view showing items sold, unit prices and profit margins."
+      },
+      {
+        "name": "LowStockAlerts",
+        "path": "frontend/src/components/stock/LowStockAlerts.tsx",
+        "description": "Focused view on products under minimum stock threshold with 1-click 'Repor Estoque' trigger button."
+      }
+    ]
+  },
+  "language_and_formatting": {
+    "locale": "pt-BR",
+    "currency_format": "Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }) (ex: R$ 1.250,50)",
+    "date_format": "Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })",
+    "terms": {
+      "sales": "Vendas",
+      "stock": "Estoque",
+      "revenue": "Faturamento",
+      "cost_price": "Preço de Custo",
+      "sale_price": "Preço de Venda",
+      "profit_margin": "Margem de Lucro",
+      "min_stock": "Estoque Mínimo",
+      "current_stock": "Estoque Atual",
+      "stock_in": "Entrada de Estoque",
+      "stock_out": "Saída / Baixa",
+      "stock_adjustment": "Ajuste de Estoque",
+      "out_of_stock": "Esgotado",
+      "low_stock": "Estoque Baixo",
+      "in_stock": "Em Estoque",
+      "counter_sale": "Venda Balcão",
+      "finalize_sale": "Finalizar Venda",
+      "cancel_sale": "Limpar Carrinho",
+      "payment_method": "Forma de Pagamento",
+      "cash": "Dinheiro",
+      "pix": "PIX",
+      "credit_card": "Cartão de Crédito",
+      "debit_card": "Cartão de Débito"
+    }
+  },
+  "motion": {
+    "transition": "transition-colors duration-150 ease-out, transition-shadow duration-150 ease-out",
+    "hover_effects": "hover:border-slate-300 hover:shadow-xs",
+    "button_press": "active:scale-[0.98] transition-transform duration-75",
+    "tab_transition": "animate-in fade-in-50 duration-200"
+  },
+  "accessibility": {
+    "wcag_level": "AA",
+    "contrast_ratio_standard": "Min 4.5:1 on all text elements",
+    "focus_rings": "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2",
+    "aria_labels": "All icon-only buttons (like delete, edit, add to cart, qty increment/decrement) must have descriptive aria-label and data-testid attributes."
+  },
+  "data_testid_specifications": {
+    "dashboard": [
+      "kpi-today-sales-count",
+      "kpi-today-revenue",
+      "kpi-low-stock-count",
+      "kpi-total-inventory-value",
+      "chart-revenue-container",
+      "dashboard-alerts-list"
+    ],
+    "pos": [
+      "pos-search-input",
+      "pos-category-filter",
+      "pos-product-card-{id}",
+      "pos-add-btn-{id}",
+      "pos-cart-container",
+      "pos-cart-item-{id}",
+      "pos-cart-qty-inc-{id}",
+      "pos-cart-qty-dec-{id}",
+      "pos-cart-item-remove-{id}",
+      "pos-cart-subtotal",
+      "pos-payment-select",
+      "pos-discount-input",
+      "pos-cart-total",
+      "pos-btn-finalize",
+      "pos-btn-clear"
+    ],
+    "products": [
+      "product-search-input",
+      "btn-open-create-product",
+      "product-modal-name-input",
+      "product-modal-sku-input",
+      "product-modal-category-select",
+      "product-modal-cost-price-input",
+      "product-modal-sale-price-input",
+      "product-modal-current-stock-input",
+      "product-modal-min-stock-input",
+      "product-modal-submit-btn",
+      "product-table-row-{id}",
+      "product-edit-btn-{id}",
+      "product-delete-btn-{id}"
+    ],
+    "stock": [
+      "btn-open-stock-in-modal",
+      "btn-open-stock-adjustment-modal",
+      "stock-in-product-select",
+      "stock-in-quantity-input",
+      "stock-in-notes-input",
+      "stock-in-submit-btn",
+      "stock-adjust-product-select",
+      "stock-adjust-type-select",
+      "stock-adjust-quantity-input",
+      "stock-adjust-reason-input",
+      "stock-adjust-submit-btn",
+      "stock-movements-table"
+    ],
+    "sales_history": [
+      "sales-history-table",
+      "sales-history-row-{id}",
+      "sales-history-view-detail-btn-{id}",
+      "sales-detail-modal"
+    ]
+  },
+  "instructions_to_main_agent": [
+    "1. Setup Backend Endpoints in FastAPI with MongoDB (Motor):",
+    "   - GET /api/dashboard/stats: Today's sales count, today's revenue, total stock value, low stock items list, daily revenue chart data (last 7/30 days)",
+    "   - CRUD /api/products: id, name, sku, category, cost_price, sale_price, current_stock, min_stock, created_at, updated_at",
+    "   - POST /api/sales: items: [{product_id, quantity, unit_price, cost_price}], payment_method, discount, notes -> atomically decrements stock in MongoDB, blocks if stock < quantity, records sale document and stock movement audit logs",
+    "   - GET /api/sales: list of sales with pagination/filtering and item details",
+    "   - POST /api/stock/movement: product_id, type ('ENTRADA' | 'AJUSTE_POSITIVO' | 'AJUSTE_NEGATIVO' | 'PERDA'), quantity, unit_cost, reason, created_at -> updates product current_stock and writes to stock_movements collection",
+    "   - GET /api/stock/movements: list chronological movements",
+    "2. Seed Data in backend/seed.py: Provide ~12-15 realistic Brazilian retail products (Bebidas, Alimentos, Limpeza, Eletrônicos, Papelaria) with SKU, cost, sale price, initial stock, and ~10 past sales movements so the dashboard looks populated immediately.",
+    "3. Frontend Implementation:",
+    "   - Configure frontend/src/index.css with `@import '@fontsource-variable/plus-jakarta-sans';` and `@import '@fontsource-variable/jetbrains-mono';`",
+    "   - Build a responsive layout with top KPI header, intuitive navigation tabs, and quick floating action triggers",
+    "   - Build the POS (Venda Balcão) with high operational speed: auto-filtering, instant quantity addition, clear visual warnings when stock is insufficient",
+    "   - Format all values with Brazilian currency (R$ XX,XX) and PT-BR dates",
+    "   - Use Sonner for toasts on actions (Venda realizada com sucesso!, Estoque atualizado, Produto cadastrado)",
+    "   - Verify with yarn typecheck in frontend/"
+  ]
+}

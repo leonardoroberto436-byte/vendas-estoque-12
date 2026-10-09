@@ -1,0 +1,403 @@
+import { useMemo, useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Minus, Plus, Search, ShoppingCart, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { apiGet, apiPost } from "@/lib/api";
+import type { PaymentMethod, Product, Sale, SaleCreate } from "@/lib/types";
+import { PAYMENT_LABELS, errorMessage, money, stockStatus } from "@/lib/format";
+import AppShell from "@/components/AppShell";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+
+const PAYMENTS: PaymentMethod[] = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"];
+
+export default function PointOfSale() {
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("TODAS");
+  const [cart, setCart] = useState<Record<string, number>>({});
+  const [payment, setPayment] = useState<PaymentMethod>("DINHEIRO");
+  const [discount, setDiscount] = useState("0");
+  const [receipt, setReceipt] = useState<Sale | null>(null);
+
+  const { data: products, isError } = useQuery({
+    queryKey: ["products"],
+    queryFn: () => apiGet<Product[]>("/products"),
+    refetchOnWindowFocus: false,
+  });
+
+  const list = isError ? [] : (products ?? []);
+  const categories = useMemo(
+    () => ["TODAS", ...Array.from(new Set(list.map((p) => p.category))).sort()],
+    [list],
+  );
+
+  const visible = list.filter((product) => {
+    const term = search.trim().toLowerCase();
+    const matchesTerm =
+      !term ||
+      product.name.toLowerCase().includes(term) ||
+      product.sku.toLowerCase().includes(term);
+    const matchesCategory = category === "TODAS" || product.category === category;
+    return matchesTerm && matchesCategory;
+  });
+
+  const cartLines = Object.entries(cart)
+    .map(([productId, quantity]) => {
+      const product = list.find((p) => p.id === productId);
+      return product ? { product, quantity } : null;
+    })
+    .filter((line): line is { product: Product; quantity: number } => line !== null);
+
+  const subtotal = cartLines.reduce((sum, l) => sum + l.product.sale_price * l.quantity, 0);
+  const discountValue = Math.min(Math.max(Number(discount.replace(",", ".")) || 0, 0), subtotal);
+  const total = subtotal - discountValue;
+
+  const addToCart = (product: Product) => {
+    const current = cart[product.id] ?? 0;
+    if (current + 1 > product.current_stock) {
+      toast.error(`Estoque insuficiente: ${product.name} tem ${product.current_stock} un.`);
+      return;
+    }
+    setCart({ ...cart, [product.id]: current + 1 });
+  };
+
+  const decrement = (productId: string) => {
+    const current = cart[productId] ?? 0;
+    const next = { ...cart };
+    if (current <= 1) delete next[productId];
+    else next[productId] = current - 1;
+    setCart(next);
+  };
+
+  const removeLine = (productId: string) => {
+    const next = { ...cart };
+    delete next[productId];
+    setCart(next);
+  };
+
+  const finalize = useMutation({
+    mutationFn: (payload: SaleCreate) => apiPost<Sale>("/sales", payload),
+    onSuccess: (sale) => {
+      setCart({});
+      setDiscount("0");
+      setReceipt(sale);
+      toast.success(`Venda realizada: ${money(sale.total)}`);
+      void queryClient.invalidateQueries({ queryKey: ["products"] });
+      void queryClient.invalidateQueries({ queryKey: ["sales"] });
+      void queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      void queryClient.invalidateQueries({ queryKey: ["movements"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível finalizar a venda")),
+  });
+
+  return (
+    <AppShell>
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Venda Balcão</h1>
+        <p className="mt-1 text-sm font-medium text-slate-500">
+          Selecione os produtos, confira o carrinho e finalize — o estoque baixa automaticamente
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="lg:col-span-7 xl:col-span-8">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
+              <Input
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nome ou SKU…"
+                className="pl-9"
+                data-testid="pos-search-input"
+              />
+            </div>
+            <Select value={category} onValueChange={(value: string) => setCategory(value)}>
+              <SelectTrigger className="sm:w-56" data-testid="pos-category-filter">
+                <SelectValue>
+                  {(value) => (value === "TODAS" ? "Todas as categorias" : String(value))}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item === "TODAS" ? "Todas as categorias" : item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {visible.map((product) => {
+              const status = stockStatus(product);
+              const inCart = cart[product.id] ?? 0;
+              return (
+                <Card
+                  key={product.id}
+                  data-testid={`pos-product-card-${product.id}`}
+                  className={`border-slate-200/90 shadow-xs transition-shadow duration-150 ease-out hover:border-slate-300 hover:shadow-sm ${
+                    inCart > 0 ? "border-teal-500 ring-1 ring-teal-500/20" : ""
+                  }`}
+                >
+                  <CardContent className="flex h-full flex-col gap-3 p-4">
+                    <div>
+                      <p className="line-clamp-2 text-sm font-semibold leading-snug text-slate-900">
+                        {product.name}
+                      </p>
+                      <p className="mt-1 inline-block rounded bg-slate-100 px-2 py-0.5 font-mono text-[11px] uppercase tracking-wider text-slate-600">
+                        {product.sku}
+                      </p>
+                    </div>
+                    <div className="mt-auto flex items-end justify-between gap-2">
+                      <div>
+                        <p className="font-mono text-lg font-semibold tabular-nums text-slate-900">
+                          {money(product.sale_price)}
+                        </p>
+                        <p
+                          className={`text-xs font-medium ${
+                            status === "ESGOTADO"
+                              ? "text-red-600"
+                              : status === "BAIXO"
+                                ? "text-amber-700"
+                                : "text-slate-500"
+                          }`}
+                        >
+                          {product.current_stock} em estoque
+                        </p>
+                      </div>
+                      <Button
+                        size="sm"
+                        onClick={() => addToCart(product)}
+                        disabled={product.current_stock === 0 || inCart >= product.current_stock}
+                        aria-label={`Adicionar ${product.name} ao carrinho`}
+                        data-testid={`pos-add-btn-${product.id}`}
+                        className="active:scale-[0.98]"
+                      >
+                        <Plus className="size-4" />
+                        {inCart > 0 ? inCart : "Add"}
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+            {visible.length === 0 && (
+              <p className="col-span-full rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+                Nenhum produto encontrado para este filtro.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:col-span-5 xl:col-span-4">
+          <Card
+            className="sticky top-36 border-teal-200 bg-emerald-50/50 shadow-xs"
+            data-testid="pos-cart-container"
+          >
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-base font-bold tracking-tight text-emerald-900">
+                <ShoppingCart className="size-4" />
+                Carrinho ({cartLines.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <ul className="space-y-2">
+                {cartLines.map(({ product, quantity }) => (
+                  <li
+                    key={product.id}
+                    data-testid={`pos-cart-item-${product.id}`}
+                    className="flex items-center gap-2 rounded-lg border border-emerald-100 bg-white px-3 py-2"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-semibold text-slate-900">{product.name}</p>
+                      <p className="font-mono text-xs tabular-nums text-slate-500">
+                        {quantity} × {money(product.sale_price)} ={" "}
+                        {money(quantity * product.sale_price)}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        size="icon-xs"
+                        variant="outline"
+                        aria-label={`Diminuir quantidade de ${product.name}`}
+                        data-testid={`pos-cart-qty-dec-${product.id}`}
+                        onClick={() => decrement(product.id)}
+                      >
+                        <Minus className="size-3" />
+                      </Button>
+                      <Button
+                        size="icon-xs"
+                        variant="outline"
+                        aria-label={`Aumentar quantidade de ${product.name}`}
+                        data-testid={`pos-cart-qty-inc-${product.id}`}
+                        onClick={() => addToCart(product)}
+                        disabled={quantity >= product.current_stock}
+                      >
+                        <Plus className="size-3" />
+                      </Button>
+                      <Button
+                        size="icon-xs"
+                        variant="ghost"
+                        aria-label={`Remover ${product.name} do carrinho`}
+                        data-testid={`pos-cart-item-remove-${product.id}`}
+                        onClick={() => removeLine(product.id)}
+                      >
+                        <Trash2 className="size-3 text-red-600" />
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+                {cartLines.length === 0 && (
+                  <li className="rounded-lg border border-dashed border-emerald-200 p-6 text-center text-sm text-emerald-800">
+                    Carrinho vazio — toque em “Add” em um produto.
+                  </li>
+                )}
+              </ul>
+
+              <div className="space-y-3 border-t border-emerald-200 pt-4">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-slate-600">Subtotal</span>
+                  <span className="font-mono font-semibold tabular-nums" data-testid="pos-cart-subtotal">
+                    {money(subtotal)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label htmlFor="pos-discount" className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Desconto
+                    </Label>
+                    <Input
+                      id="pos-discount"
+                      value={discount}
+                      onChange={(event) => setDiscount(event.target.value)}
+                      inputMode="decimal"
+                      data-testid="pos-discount-input"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+                      Pagamento
+                    </Label>
+                    <Select
+                      value={payment}
+                      onValueChange={(value: string) => setPayment(value as PaymentMethod)}
+                    >
+                      <SelectTrigger data-testid="pos-payment-select">
+                        <SelectValue>
+                          {(value) => PAYMENT_LABELS[value as PaymentMethod]}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectContent>
+                        {PAYMENTS.map((method) => (
+                          <SelectItem key={method} value={method}>
+                            {PAYMENT_LABELS[method]}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-end justify-between border-t border-emerald-200 pt-3">
+                  <span className="text-sm font-semibold text-emerald-900">Total</span>
+                  <span
+                    className="font-mono text-2xl font-bold tabular-nums text-emerald-700"
+                    data-testid="pos-cart-total"
+                  >
+                    {money(total)}
+                  </span>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    className="flex-1 active:scale-[0.98]"
+                    disabled={cartLines.length === 0 || finalize.isPending}
+                    data-testid="pos-btn-finalize"
+                    onClick={() =>
+                      finalize.mutate({
+                        items: cartLines.map((l) => ({
+                          product_id: l.product.id,
+                          quantity: l.quantity,
+                        })),
+                        payment_method: payment,
+                        discount: discountValue,
+                        notes: "",
+                      })
+                    }
+                  >
+                    {finalize.isPending ? "Finalizando…" : "Finalizar Venda"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setCart({});
+                      setDiscount("0");
+                    }}
+                    disabled={cartLines.length === 0}
+                    data-testid="pos-btn-clear"
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      <Dialog open={receipt !== null} onOpenChange={(open) => !open && setReceipt(null)}>
+        <DialogContent data-testid="pos-receipt-modal">
+          <DialogHeader>
+            <DialogTitle>Venda registrada</DialogTitle>
+            <DialogDescription>
+              Estoque atualizado automaticamente para cada item vendido.
+            </DialogDescription>
+          </DialogHeader>
+          {receipt && (
+            <div className="space-y-2 text-sm">
+              {receipt.items.map((item) => (
+                <div key={item.product_id} className="flex justify-between gap-3">
+                  <span className="truncate text-slate-700">
+                    {item.quantity}× {item.product_name}
+                  </span>
+                  <span className="font-mono tabular-nums">{money(item.line_total)}</span>
+                </div>
+              ))}
+              <div className="flex justify-between border-t border-border pt-2 font-semibold">
+                <span>Total ({PAYMENT_LABELS[receipt.payment_method]})</span>
+                <span className="font-mono tabular-nums" data-testid="pos-receipt-total">
+                  {money(receipt.total)}
+                </span>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setReceipt(null)} data-testid="pos-receipt-close">
+              Nova venda
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </AppShell>
+  );
+}

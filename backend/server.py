@@ -55,11 +55,13 @@ from routers import (  # noqa: E402
     auth,
     billing,
     legal,
+    public,
     dashboard,
     cron,
     platform,
     settings as settings_router,
     products,
+    product_import,
     reports,
     returns,
     sales,
@@ -70,9 +72,11 @@ from routers import (  # noqa: E402
 # Public: signup / login / forgot-password handle their own checks
 api_router.include_router(auth.router)
 api_router.include_router(legal.router)  # dados dos Termos/Privacidade (público)
+api_router.include_router(public.router)  # preços/limites para a página de vendas (público)
 
 # Tenant-scoped: each router declares require_org (or require(...)) per route,
 # so the org always comes from the session, never from the request.
+api_router.include_router(product_import.router)  # antes de /products/{id}
 api_router.include_router(products.router)
 api_router.include_router(sales.router)
 api_router.include_router(returns.router)

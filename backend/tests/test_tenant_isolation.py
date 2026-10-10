@@ -40,7 +40,7 @@ def _client() -> httpx.Client:
 
 
 def _signup(suffix: str) -> dict:
-    """Public self-service signup -> company stays PENDENTE until approved."""
+    """Public self-service signup -> company starts its free trial right away."""
     email = f"empresa.{suffix}.{uuid.uuid4().hex[:8]}@teste-saas.com"
     with _client() as c:
         resp = c.post(
@@ -55,7 +55,7 @@ def _signup(suffix: str) -> dict:
         )
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert body["status"] == "PENDENTE"
+    assert body["status"] == "APROVADA"
     return {"email": email, "org_id": body["organization_id"], "company": body["company_name"]}
 
 
@@ -137,8 +137,13 @@ def tenants():
 
 # ----------------------------------------------------------------- signup gate
 def test_pending_company_cannot_log_in():
-    """A fresh signup must not reach any data before the platform owner approves."""
+    """A company put on hold (PENDENTE) by the owner cannot reach any data."""
     pending = _signup("Pendente")
+    with _session(PLATFORM_EMAIL, PLATFORM_PASSWORD) as owner:
+        resp = owner.put(
+            f"/platform/organizations/{pending['org_id']}/status", json={"status": "PENDENTE"}
+        )
+        assert resp.status_code == 200, resp.text
     with _client() as c:
         resp = c.post("/auth/login", json={"email": pending["email"], "password": PASSWORD})
     assert resp.status_code == 403

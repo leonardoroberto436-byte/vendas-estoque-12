@@ -16,11 +16,21 @@ import Profile from "@/pages/Profile";
 import Company from "@/pages/Company";
 import Subscription from "@/pages/Subscription";
 import { PrivacyPage, TermsPage } from "@/pages/Legal";
+import Landing from "@/pages/Landing";
 import RequireAuth from "@/components/RequireAuth";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 
 /** Tenant-scoped page: any signed-in member of a company. */
 function Shop({ children }: { children: React.ReactNode }) {
   return <RequireAuth>{children}</RequireAuth>;
+}
+
+/** "/": visitante vê a página de vendas; quem está logado vai para o sistema. */
+function HomeOrLanding() {
+  const { isLoading, unauthenticated, blockedMessage } = useCurrentUser();
+  if (isLoading) return <div className="min-h-screen bg-white" />;
+  if (unauthenticated && !blockedMessage) return <Landing />;
+  return <Shop><Home /></Shop>;
 }
 
 // One <Route> per page in src/pages; BrowserRouter already wraps this in main.tsx.
@@ -36,7 +46,7 @@ export default function App() {
       <Route path="/privacidade" element={<PrivacyPage />} />
 
       {/* company workspace */}
-      <Route path="/" element={<Shop><Home /></Shop>} />
+      <Route path="/" element={<HomeOrLanding />} />
       <Route path="/vender" element={<Shop><PointOfSale /></Shop>} />
       <Route path="/vendas" element={<Shop><SalesHistory /></Shop>} />
       <Route path="/devolucoes" element={<Shop><Returns /></Shop>} />

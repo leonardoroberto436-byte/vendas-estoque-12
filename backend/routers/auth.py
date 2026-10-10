@@ -26,7 +26,8 @@ from lib.auth import (
 from lib.billing import BLOCK_MESSAGES, billing_block
 from routers.legal import TERMS_VERSION
 from lib.db import db
-from lib.email import send_password_reset, send_signup_pending
+from lib.backups import log_platform_action
+from lib.email import send_org_approved, send_password_reset
 from lib.subscriptions import days_until
 from lib.password_policy import validate_new_password
 from lib.throttle import clear_throttle, client_ip, throttle
@@ -108,11 +109,12 @@ def _session_user(user: dict, org: dict | None) -> SessionUser:
 
 # ------------------------------------------------------------------- signup
 @router.post("/signup", response_model=SignupResponse, status_code=201)
-async def signup(payload: SignupRequest, request: Request):
-    """Self-service signup: creates the company as PENDENTE plus its first admin.
+async def signup(payload: SignupRequest, request: Request, response: Response):
+    """Self-service signup: the company starts its free trial right away.
 
-    The company stays unusable until the platform owner approves it, so a signup
-    can never read data or occupy a paid seat on its own.
+    Creates the company (APROVADA, plano TESTE por TRIAL_DAYS dias) and its first
+    ADMIN, and signs the person in. Abuse is contained by the signup throttle, the
+    plan limits of the trial and the owner, who can still suspend any company.
     """
     email = payload.email.strip().lower()
     # anti-abuso: limita cadastros por hora por IP — evita inundar o painel do
@@ -139,13 +141,16 @@ async def signup(payload: SignupRequest, request: Request):
         "terms_accepted_ip": client_ip(request),
     }
 
+    now = datetime.now(timezone.utc)
     org = Organization(
         name=payload.company_name.strip(),
         owner_name=payload.name.strip(),
         owner_email=email,
-        status="PENDENTE",
+        status="APROVADA",
         plan="TESTE",
         subscription_status="TESTE",
+        trial_ends_at=now + timedelta(days=TRIAL_DAYS),
+        approved_at=now,
     )
     await db.organizations.insert_one({**org.model_dump(), **accepted})
 
@@ -160,20 +165,25 @@ async def signup(payload: SignupRequest, request: Request):
         {**user.model_dump(), "password_hash": hash_password(payload.password), **accepted}
     )
     await _log_access(request, "CADASTRO", email, {**user.model_dump()})
+    await log_platform_action(
+        actor_email=email,
+        action="CADASTRO_TESTE",
+        target=org.name,
+        details=f"teste grátis de {TRIAL_DAYS} dias · responsável {user.name}",
+    )
 
     try:
-        await send_signup_pending(to=email, name=user.name, company=org.name)
+        await send_org_approved(to=email, name=user.name, company=org.name, trial_days=TRIAL_DAYS)
     except HTTPException as exc:  # email outage must not void a valid signup
         logger.warning("Signup email não enviado para %s: %s", email, exc.detail)
 
+    # já entra logado: o teste começa na hora
+    await create_session(user.id, response)
     return SignupResponse(
         organization_id=org.id,
         company_name=org.name,
         status=org.status,
-        message=(
-            "Cadastro recebido. Sua empresa está aguardando liberação — "
-            "avisamos por e-mail assim que o acesso for aprovado."
-        ),
+        message=f"Conta criada! Seu teste grátis de {TRIAL_DAYS} dias já começou.",
     )
 
 

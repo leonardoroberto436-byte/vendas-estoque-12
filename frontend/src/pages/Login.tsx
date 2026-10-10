@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -56,7 +57,7 @@ export default function Login() {
           />
           <div className="leading-tight">
             <p className="text-lg font-bold tracking-tight text-slate-900">
-              Estoque &amp; Vendas Pro
+              {BRAND_NAME}
             </p>
             <p className="text-xs font-medium text-slate-500">Acesso restrito à equipe autorizada</p>
           </div>

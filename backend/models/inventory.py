@@ -34,6 +34,8 @@ class ProductCreate(BaseModel):
     sale_price: float = Field(ge=0)
     current_stock: int = Field(default=0, ge=0)
     min_stock: int = Field(default=0, ge=0)
+    # código de barras (EAN/GTIN) lido pelo leitor no caixa — opcional
+    barcode: str = Field(default="", max_length=40)
 
 
 class ProductUpdate(BaseModel):
@@ -43,6 +45,7 @@ class ProductUpdate(BaseModel):
     cost_price: Optional[float] = Field(default=None, ge=0)
     sale_price: Optional[float] = Field(default=None, ge=0)
     min_stock: Optional[int] = Field(default=None, ge=0)
+    barcode: Optional[str] = Field(default=None, max_length=40)
 
 
 class Product(BaseModel):
@@ -55,6 +58,7 @@ class Product(BaseModel):
     sale_price: float
     current_stock: int
     min_stock: int
+    barcode: str = ""
     created_at: datetime = Field(default_factory=_now)
     updated_at: datetime = Field(default_factory=_now)
 

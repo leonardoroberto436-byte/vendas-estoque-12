@@ -15,7 +15,7 @@ SubscriptionStatus = Literal["TESTE", "ATIVO", "INADIMPLENTE", "CANCELADO"]
 OrgStatus = Literal["PENDENTE", "APROVADA", "SUSPENSA"]
 
 # Teste grátis: curto de propósito — o cliente experimenta e já escolhe o plano.
-TRIAL_DAYS = 2
+TRIAL_DAYS = 7
 
 PLAN_LABELS: dict[str, str] = {
     "TESTE": "Período de teste",

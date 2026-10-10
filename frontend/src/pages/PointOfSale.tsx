@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Minus, MessageCircle, Plus, Printer, Search, ShoppingCart, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -35,12 +35,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { BRAND_NAME } from "@/lib/brand";
 
 const PAYMENTS: PaymentMethod[] = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"];
 
 export default function PointOfSale() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState("TODAS");
   const [cart, setCart] = useState<Record<string, number>>({});
   const [payment, setPayment] = useState<PaymentMethod>("DINHEIRO");
@@ -48,7 +50,7 @@ export default function PointOfSale() {
   const [receipt, setReceipt] = useState<Sale | null>(null);
   const [phone, setPhone] = useState("");
   const { user } = useCurrentUser();
-  const company = user?.organization?.name ?? "Estoque & Vendas Pro";
+  const company = user?.organization?.name ?? BRAND_NAME;
   const { data: branding } = useQuery({
     queryKey: ["branding"],
     queryFn: () => apiGet<OrgBranding>("/settings/branding"),
@@ -75,7 +77,8 @@ export default function PointOfSale() {
     const matchesTerm =
       !term ||
       product.name.toLowerCase().includes(term) ||
-      product.sku.toLowerCase().includes(term);
+      product.sku.toLowerCase().includes(term) ||
+      (product.barcode ?? "").includes(term);
     const matchesCategory = category === "TODAS" || product.category === category;
     return matchesTerm && matchesCategory;
   });
@@ -98,6 +101,28 @@ export default function PointOfSale() {
       return;
     }
     setCart({ ...cart, [product.id]: current + 1 });
+  };
+
+  // Leitor de código de barras (USB/Bluetooth) funciona como um teclado: digita o
+  // código no campo de busca e aperta Enter. No Enter procuramos o produto pelo
+  // código de barras ou SKU exato; se não houver, e a busca mostrar um só produto,
+  // ele entra no carrinho. O campo é limpo e continua focado para a próxima leitura.
+  const handleScan = () => {
+    const code = search.replace(/\s+/g, "");
+    if (!code) return;
+    const upper = code.toUpperCase();
+    const exact =
+      list.find((p) => p.barcode && p.barcode === code) ??
+      list.find((p) => p.sku.toUpperCase() === upper);
+    const product = exact ?? (visible.length === 1 ? visible[0] : undefined);
+    if (!product) {
+      toast.error(`Nenhum produto com o código ${code}`);
+      searchRef.current?.select();
+      return;
+    }
+    addToCart(product);
+    setSearch("");
+    searchRef.current?.focus();
   };
 
   const decrement = (productId: string) => {
@@ -145,9 +170,17 @@ export default function PointOfSale() {
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
               <Input
+                ref={searchRef}
+                autoFocus
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Buscar por nome ou SKU…"
+                onKeyDown={(event) => {
+                  if (event.key === "Enter") {
+                    event.preventDefault();
+                    handleScan();
+                  }
+                }}
+                placeholder="Buscar ou passar o leitor de código de barras…"
                 className="pl-9"
                 data-testid="pos-search-input"
               />

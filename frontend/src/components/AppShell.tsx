@@ -22,6 +22,8 @@ import { endSession } from "@/lib/session";
 import { ORG_STATUS_LABELS, SUBSCRIPTION_LABELS } from "@/lib/format";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Button } from "@/components/ui/button";
+import { BRAND_NAME } from "@/lib/brand";
+import WhatsAppButton from "@/components/WhatsAppButton";
 
 const NAV = [
   { to: "/", label: "Visão Geral", icon: LayoutDashboard, testId: "nav-dashboard" },
@@ -58,7 +60,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className="text-base font-bold tracking-tight text-slate-900"
                   data-testid="app-title"
                 >
-                  Estoque &amp; Vendas Pro
+                  {BRAND_NAME}
                 </p>
                 <p className="text-xs font-medium text-slate-500" data-testid="appshell-company-name">
                   {user?.organization?.name ?? "Controle de estoque e vendas"}
@@ -210,6 +212,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="mx-auto max-w-[1400px] px-5 py-6 lg:px-8 lg:py-8">{children}</main>
+      {/* no caixa o botão cobriria o "Finalizar venda" no celular */}
+      {location.pathname !== "/vender" && (
+        <WhatsAppButton
+          message={`Olá! Sou da loja ${user?.organization?.name ?? ""} e preciso de ajuda com o ${BRAND_NAME}.`}
+        />
+      )}
     </div>
   );
 }

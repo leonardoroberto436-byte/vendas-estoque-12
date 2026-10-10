@@ -26,6 +26,8 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("org_id", ASCENDING), ("sku", ASCENDING)], name="org_sku", unique=True),
         IndexModel([("org_id", ASCENDING), ("name", ASCENDING)], name="org_name"),
         IndexModel([("org_id", ASCENDING), ("category", ASCENDING)], name="org_category"),
+        # leitura no caixa; vazio é comum, então a unicidade é checada no código
+        IndexModel([("org_id", ASCENDING), ("barcode", ASCENDING)], name="org_barcode"),
     ],
     "sales": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),

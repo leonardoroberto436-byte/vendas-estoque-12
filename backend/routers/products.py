@@ -19,6 +19,21 @@ from models.inventory import Product, ProductCreate, ProductUpdate, StockMovemen
 router = APIRouter(prefix="/products", tags=["products"])
 
 
+def clean_barcode(value: str) -> str:
+    """Leitores às vezes mandam espaços/quebras junto — guarda só o código."""
+    return re.sub(r"\s+", "", value or "")
+
+
+async def ensure_barcode_free(principal: Principal, barcode: str, except_id: str = "") -> None:
+    if not barcode:
+        return
+    query: dict = {"barcode": barcode}
+    if except_id:
+        query["id"] = {"$ne": except_id}
+    if await db.products.find_one(scoped(principal, query)):
+        raise HTTPException(status_code=409, detail="Código de barras já cadastrado em outro produto")
+
+
 def aware(doc: dict) -> dict:
     """Motor hands back naive datetimes — normalise to aware UTC before Pydantic."""
     for key in ("created_at", "updated_at"):
@@ -42,6 +57,7 @@ async def list_products(
         extra["$or"] = [
             {"name": {"$regex": pattern, "$options": "i"}},
             {"sku": {"$regex": pattern, "$options": "i"}},
+            {"barcode": {"$regex": pattern, "$options": "i"}},
         ]
     if category and category != "TODAS":
         extra["category"] = category
@@ -73,8 +89,12 @@ async def create_product(
     existing = await db.products.find_one(scoped(principal, {"sku": sku}))
     if existing:
         raise HTTPException(status_code=409, detail="SKU já cadastrado")
+    barcode = clean_barcode(payload.barcode)
+    await ensure_barcode_free(principal, barcode)
 
-    product = Product(**{**payload.model_dump(), "sku": sku}, org_id=principal.org_id)
+    product = Product(
+        **{**payload.model_dump(), "sku": sku, "barcode": barcode}, org_id=principal.org_id
+    )
     await db.products.insert_one(product.model_dump())
 
     if product.current_stock > 0:
@@ -112,6 +132,9 @@ async def update_product(
         )
         if clash:
             raise HTTPException(status_code=409, detail="SKU já cadastrado em outro produto")
+    if "barcode" in changes:
+        changes["barcode"] = clean_barcode(changes["barcode"])
+        await ensure_barcode_free(principal, changes["barcode"], except_id=product_id)
     changes["updated_at"] = datetime.now(timezone.utc)
     await db.products.update_one(scoped(principal, {"id": product_id}), {"$set": changes})
     updated = await db.products.find_one(scoped(principal, {"id": product_id}))

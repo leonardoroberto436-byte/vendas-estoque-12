@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Store } from "lucide-react";
 import { apiGet } from "@/lib/api";
 import type { LegalInfo } from "@/lib/types";
+import { BRAND_NAME } from "@/lib/brand";
 
 // Texto-base dos documentos legais. Os dados de quem presta o serviço (nome,
 // CNPJ/CPF, e-mail, cidade) vêm de /api/legal, configurados no servidor.
@@ -14,7 +15,7 @@ function useLegal() {
     queryFn: () => apiGet<LegalInfo>("/legal"),
     staleTime: 60 * 60 * 1000,
   });
-  const product = data?.product_name ?? "Estoque & Vendas Pro";
+  const product = data?.product_name ?? BRAND_NAME;
   const company = data?.company_name ?? product;
   const who = data?.document ? `${company}, inscrita sob o nº ${data.document}` : company;
   const contact = data?.contact_email

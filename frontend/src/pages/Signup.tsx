@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { Link, useNavigate } from "react-router-dom";
 import { Building2, CheckCircle2, Mail, Store } from "lucide-react";
 import { apiPost } from "@/lib/api";
 import type { SignupResponse } from "@/lib/types";
@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { BRAND_NAME } from "@/lib/brand";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -20,6 +21,8 @@ export default function Signup() {
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<SignupResponse | null>(null);
+  const queryClient = useQueryClient();
+  const navigate = useNavigate();
 
   const signup = useMutation({
     mutationFn: () =>
@@ -30,7 +33,12 @@ export default function Signup() {
         password,
         accept_terms: accepted,
       }),
-    onSuccess: (data) => setDone(data),
+    onSuccess: async (data) => {
+      // a conta já nasce liberada e logada: vai direto para o sistema
+      setDone(data);
+      await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+      navigate("/", { replace: true });
+    },
     onError: (err) => setError(errorMessage(err, "Não foi possível concluir o cadastro")),
   });
 
@@ -53,18 +61,18 @@ export default function Signup() {
           <CardContent className="p-8 text-center" data-testid="signup-success">
             <CheckCircle2 className="mx-auto size-12 text-emerald-600" />
             <h1 className="mt-4 text-xl font-bold tracking-tight text-slate-900">
-              Cadastro recebido
+              Conta criada
             </h1>
             <p className="mt-2 text-sm text-slate-600">{done.message}</p>
             <p className="mt-4 rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-700">
               Empresa: <strong>{done.company_name}</strong>
             </p>
             <Link
-              to="/login"
+              to="/"
               className="mt-6 inline-flex rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground"
               data-testid="signup-go-login"
             >
-              Ir para o login
+              Entrar no sistema
             </Link>
           </CardContent>
         </Card>
@@ -81,10 +89,10 @@ export default function Signup() {
           </span>
           <div className="leading-tight">
             <p className="text-lg font-bold tracking-tight text-slate-900">
-              Estoque &amp; Vendas Pro
+              {BRAND_NAME}
             </p>
             <p className="text-xs font-medium text-slate-500">
-              Crie a conta da sua empresa — 2 dias de teste grátis
+              Crie a conta da sua empresa — 7 dias de teste grátis
             </p>
           </div>
         </div>

@@ -43,6 +43,9 @@ def grace_days() -> int:
         return PAYMENT_GRACE_DAYS
 
 
+# Avisos por e-mail antes do fim do teste grátis (dias antes).
+TRIAL_WARNING_DAYS = (3, 1)
+
 BLOCK_TRIAL = "TESTE_ENCERRADO"
 BLOCK_PAYMENT = "PAGAMENTO"
 BLOCK_CANCELLED = "CANCELADO"
@@ -315,21 +318,27 @@ async def run_billing_daily() -> dict:
 
         if org.get("subscription_status") == "TESTE":
             ends = _aware(org.get("trial_ends_at"))
-            if ends and timedelta(0) < ends - now <= timedelta(days=1):
-                marker = f"teste-acaba:{ends.date().isoformat()}"
-                if marker not in sent:
-                    await _notify(
-                        org,
-                        "Seu teste grátis termina amanhã",
-                        [
-                            f"O período de teste da empresa {org.get('name', '')} termina em menos de 24 horas.",
-                            "Escolha um plano em Minha assinatura para continuar usando sem interrupção.",
-                        ],
-                    )
-                    await db.organizations.update_one(
-                        {"id": org["id"]}, {"$addToSet": {"reminders_sent": marker}}
-                    )
-                    trial_warned += 1
+            left = (ends - now) if ends else None
+            for days in TRIAL_WARNING_DAYS:
+                if left is None or not (timedelta(days=days - 1) < left <= timedelta(days=days)):
+                    continue
+                marker = f"teste-{days}d:{ends.date().isoformat()}"
+                if marker in sent:
+                    continue
+                when = "amanhã" if days == 1 else f"em {days} dias"
+                await _notify(
+                    org,
+                    f"Seu teste grátis termina {when}",
+                    [
+                        f"O período de teste da empresa {org.get('name', '')} termina {when}.",
+                        "Escolha um plano em Minha assinatura para continuar usando sem interrupção. "
+                        "Seus produtos e vendas continuam guardados.",
+                    ],
+                )
+                await db.organizations.update_one(
+                    {"id": org["id"]}, {"$addToSet": {"reminders_sent": marker}}
+                )
+                trial_warned += 1
 
     # suspended-for-payment companies are no longer APROVADA — nothing else to do
     result = {"suspended": suspended, "warned": warned, "closed": closed, "trial_warned": trial_warned}

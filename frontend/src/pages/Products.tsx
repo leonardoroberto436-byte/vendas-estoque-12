@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Pencil, Plus, Search, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Pencil, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import type { Product, ProductCreate } from "@/lib/types";
@@ -14,6 +14,7 @@ import {
 } from "@/lib/format";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
+import ImportProductsDialog from "@/components/ImportProductsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,6 +44,7 @@ interface FormState {
   sale_price: string;
   current_stock: string;
   min_stock: string;
+  barcode: string;
 }
 
 const EMPTY: FormState = {
@@ -53,6 +55,7 @@ const EMPTY: FormState = {
   sale_price: "",
   current_stock: "0",
   min_stock: "0",
+  barcode: "",
 };
 
 const num = (value: string) => Number(value.replace(",", ".")) || 0;
@@ -67,6 +70,7 @@ export default function Products() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
   const [deleting, setDeleting] = useState<Product | null>(null);
+  const [importing, setImporting] = useState(false);
 
   const { data, isError } = useQuery({
     queryKey: ["products"],
@@ -77,7 +81,11 @@ export default function Products() {
 
   const term = search.trim().toLowerCase();
   const visible = products.filter(
-    (p) => !term || p.name.toLowerCase().includes(term) || p.sku.toLowerCase().includes(term),
+    (p) =>
+      !term ||
+      p.name.toLowerCase().includes(term) ||
+      p.sku.toLowerCase().includes(term) ||
+      (p.barcode ?? "").includes(term),
   );
 
   const refresh = () => {
@@ -96,6 +104,7 @@ export default function Products() {
         sale_price: num(form.sale_price),
         current_stock: Math.max(0, Math.trunc(num(form.current_stock))),
         min_stock: Math.max(0, Math.trunc(num(form.min_stock))),
+        barcode: form.barcode.replace(/\s+/g, ""),
       };
       if (editing) {
         const { current_stock: _ignored, ...update } = payload;
@@ -139,6 +148,7 @@ export default function Products() {
       sale_price: String(product.sale_price),
       current_stock: String(product.current_stock),
       min_stock: String(product.min_stock),
+      barcode: product.barcode ?? "",
     });
     setOpen(true);
   };
@@ -156,10 +166,21 @@ export default function Products() {
           </p>
         </div>
         {isAdmin && (
-          <Button onClick={openCreate} data-testid="btn-open-create-product" className="active:scale-[0.98]">
-            <Plus className="size-4" />
-            Novo Produto
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setImporting(true)}
+              data-testid="btn-open-import-products"
+              className="active:scale-[0.98]"
+            >
+              <FileSpreadsheet className="size-4" />
+              Importar planilha
+            </Button>
+            <Button onClick={openCreate} data-testid="btn-open-create-product" className="active:scale-[0.98]">
+              <Plus className="size-4" />
+              Novo Produto
+            </Button>
+          </div>
         )}
       </div>
 
@@ -168,7 +189,7 @@ export default function Products() {
         <Input
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por nome ou SKU…"
+          placeholder="Buscar por nome, SKU ou código de barras…"
           className="pl-9"
           data-testid="product-search-input"
         />
@@ -268,6 +289,8 @@ export default function Products() {
         </CardContent>
       </Card>
 
+      <ImportProductsDialog open={importing} onOpenChange={setImporting} onImported={refresh} />
+
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-lg" data-testid="product-modal">
           <DialogHeader>
@@ -347,6 +370,21 @@ export default function Products() {
                 value={form.min_stock}
                 onChange={(e) => setForm({ ...form, min_stock: e.target.value })}
                 data-testid="product-modal-min-stock-input"
+              />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <Label htmlFor="p-barcode">Código de barras (opcional)</Label>
+              <Input
+                id="p-barcode"
+                inputMode="numeric"
+                value={form.barcode}
+                placeholder="Clique aqui e passe o leitor na etiqueta"
+                onChange={(e) => setForm({ ...form, barcode: e.target.value })}
+                // o leitor "aperta Enter" no fim da leitura — aqui isso não deve fazer nada
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") e.preventDefault();
+                }}
+                data-testid="product-modal-barcode-input"
               />
             </div>
             <p className="col-span-2 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-600">

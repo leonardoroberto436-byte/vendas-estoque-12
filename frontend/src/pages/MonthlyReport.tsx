@@ -32,6 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { BRAND_NAME } from "@/lib/brand";
 
 const keyOf = (month: ReportMonth) => `${month.year}-${String(month.month).padStart(2, "0")}`;
 
@@ -127,7 +128,7 @@ export default function MonthlyReportPage() {
             <img src={branding.logo} alt="" className="mb-2 max-h-16 object-contain" />
           )}
           <h2 className="text-2xl font-bold tracking-tight text-slate-900">
-            {branding?.trade_name?.trim() || user?.organization?.name || "Estoque & Vendas Pro"} —
+            {branding?.trade_name?.trim() || user?.organization?.name || BRAND_NAME} —
             Fechamento {report?.label ?? ""}
           </h2>
           {(branding?.cnpj?.trim() || branding?.phone?.trim() || branding?.address?.trim()) && (

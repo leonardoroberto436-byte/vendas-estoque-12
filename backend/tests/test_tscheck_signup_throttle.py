@@ -38,7 +38,8 @@ def test_legitimate_signup_succeeds():
         )
         assert resp.status_code == 201, resp.text
         body = resp.json()
-        assert body["status"] == "PENDENTE"
+        assert body["status"] == "APROVADA"  # o teste grátis começa na hora
+        assert resp.cookies.get("ev_session")  # e a pessoa já entra logada
         assert body["organization_id"]
 
         # same email twice is rejected (409), confirming the endpoint still

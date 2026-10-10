@@ -253,6 +253,7 @@ export interface Product {
   sale_price: number;
   current_stock: number;
   min_stock: number;
+  barcode: string;
   created_at: string;
   updated_at: string;
 }
@@ -265,6 +266,7 @@ export interface ProductCreate {
   sale_price: number;
   current_stock: number;
   min_stock: number;
+  barcode?: string;
 }
 
 export interface ProductUpdate {
@@ -274,6 +276,7 @@ export interface ProductUpdate {
   cost_price?: number;
   sale_price?: number;
   min_stock?: number;
+  barcode?: string;
 }
 
 export interface SaleItem {
@@ -545,4 +548,27 @@ export interface SubscribeResponse {
 
 export interface PlanLimits {
   limits: Record<string, PlanLimit>;
+}
+
+// ---------------------------------------------------------------- importação de produtos
+export type ImportAction = "CRIAR" | "ATUALIZAR" | "SEM_MUDANCA" | "ERRO";
+
+export interface ImportRow {
+  row: number;
+  sku: string;
+  name: string;
+  action: ImportAction;
+  message: string;
+}
+
+export interface ImportResult {
+  dry_run: boolean;
+  total_rows: number;
+  created: number;
+  updated: number;
+  unchanged: number;
+  errors: number;
+  rows: ImportRow[];
+  blocked: string;
+  message: string;
 }

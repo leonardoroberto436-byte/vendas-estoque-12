@@ -73,7 +73,35 @@ INDEXES: dict[str, list[IndexModel]] = {
 }
 
 
+# Índices que existiram em versões anteriores e precisam sair do caminho.
+# `sessions.token` era UNIQUE no token em texto puro; hoje guardamos só o hash
+# (lib/auth.create_session), então todo documento novo teria token=null e o
+# segundo login falharia com erro de chave duplicada.
+STALE_INDEXES: dict[str, tuple[str, ...]] = {
+    "sessions": ("token",),
+}
+
+
+async def drop_stale_indexes() -> None:
+    """Migração idempotente: remove índices de versões antigas, se existirem."""
+    for collection, names in STALE_INDEXES.items():
+        try:
+            existing = await db[collection].index_information()
+        except Exception as exc:  # noqa: BLE001 — nunca travar o boot por causa de índice
+            logger.error("drop_stale_indexes(%s): %s", collection, exc)
+            continue
+        for name in names:
+            if name not in existing:
+                continue
+            try:
+                await db[collection].drop_index(name)
+                logger.warning("Índice obsoleto removido: %s.%s", collection, name)
+            except Exception as exc:  # noqa: BLE001
+                logger.error("drop_stale_indexes(%s.%s): %s", collection, name, exc)
+
+
 async def ensure_indexes() -> None:
+    await drop_stale_indexes()
     for collection, models in INDEXES.items():
         for model in models:  # one at a time so a bad spec skips only itself
             try:

@@ -63,7 +63,8 @@ def test_ninth_wrong_password_is_throttled(fresh_account):
     email = fresh_account
     with _client() as c:
         statuses = []
-        for _ in range(8):
+        limit = int(os.environ.get("LOGIN_LIMIT_PER_5MIN", "8"))
+        for _ in range(limit):
             r = c.post("/auth/login", json={"email": email, "password": "senha-errada-xyz"})
             statuses.append(r.status_code)
         assert all(s == 401 for s in statuses), statuses

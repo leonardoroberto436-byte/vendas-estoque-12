@@ -98,3 +98,7 @@ backups/
 /backups/
 *.bson
 *.archive
+
+# exceção: modelo sem valores, seguro para o repositório
+!backend/.env.example
+deployer-agent-docs/

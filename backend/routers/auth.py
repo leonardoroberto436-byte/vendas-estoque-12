@@ -108,6 +108,13 @@ def _session_user(user: dict, org: dict | None) -> SessionUser:
 
 
 # ------------------------------------------------------------------- signup
+
+def login_limit() -> int:
+    try:
+        return max(1, int(os.environ.get("LOGIN_LIMIT_PER_5MIN", "8")))
+    except ValueError:
+        return 8
+
 @router.post("/signup", response_model=SignupResponse, status_code=201)
 async def signup(payload: SignupRequest, request: Request, response: Response):
     """Self-service signup: the company starts its free trial right away.
@@ -192,7 +199,9 @@ async def signup(payload: SignupRequest, request: Request, response: Response):
 async def login(payload: LoginRequest, request: Request, response: Response):
     email = payload.email.strip().lower()
     # brute-force brake: 8 tries per 5 min per IP+account, cleared on success
-    throttle(request, "login", email, limit=8, window=300)
+    # tentativas falhas por IP+conta; o acerto zera o contador. Ajustável por
+    # LOGIN_LIMIT_PER_5MIN (a suíte de testes usa um valor maior).
+    throttle(request, "login", email, limit=login_limit(), window=300)
     user = await db.users.find_one({"email": email})
     # same message for unknown email and wrong password — no account enumeration
     if not user or not verify_password(payload.password, user.get("password_hash", "")):

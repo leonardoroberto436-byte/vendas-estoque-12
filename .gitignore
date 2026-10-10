@@ -92,3 +92,9 @@ android-sdk/
 credentials.json
 *.key
 .credentials
+
+# Backups do banco (mongodump) e dumps — contem dados de clientes, nunca versionar
+backups/
+/backups/
+*.bson
+*.archive

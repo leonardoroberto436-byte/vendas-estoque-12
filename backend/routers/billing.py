@@ -134,7 +134,7 @@ async def subscribe(payload: SubscribeRequest, principal: Principal = Depends(re
         )
     except mp.MercadoPagoError as exc:
         logger.error("Criação de assinatura falhou para %s: %s", org["id"], exc)
-        raise HTTPException(status_code=502, detail="Não foi possível falar com o Mercado Pago. Tente de novo.")
+        raise HTTPException(status_code=400, detail=mp.friendly_error(exc))
 
     checkout = preapproval.get("init_point") or ""
     if not preapproval.get("id") or not checkout:
@@ -190,7 +190,7 @@ async def change_plan(payload: ChangePlanRequest, principal: Principal = Depends
         )
     except mp.MercadoPagoError as exc:
         logger.error("Troca de plano falhou para %s: %s", org["id"], exc)
-        raise HTTPException(status_code=502, detail="Não foi possível falar com o Mercado Pago. Tente de novo.")
+        raise HTTPException(status_code=400, detail=mp.friendly_error(exc))
 
     upgrade = prices.get(payload.plan, 0) >= prices.get(org.get("plan", ""), 0)
     changes: dict = {"billing.amount": amount}
@@ -222,7 +222,7 @@ async def cancel(principal: Principal = Depends(require_billing_admin)):
         await mp.update_preapproval(billing["mp_preapproval_id"], {"status": "cancelled"})
     except mp.MercadoPagoError as exc:
         logger.error("Cancelamento falhou para %s: %s", org["id"], exc)
-        raise HTTPException(status_code=502, detail="Não foi possível falar com o Mercado Pago. Tente de novo.")
+        raise HTTPException(status_code=400, detail=mp.friendly_error(exc))
     until = _aware(org.get("due_date")) or datetime.now(timezone.utc)
     await db.organizations.update_one(
         {"id": org["id"]},

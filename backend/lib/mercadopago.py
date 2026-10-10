@@ -39,7 +39,32 @@ def configured() -> bool:
 
 
 class MercadoPagoError(Exception):
-    pass
+    def __init__(self, message: str, mp_message: str = "", status: int = 0):
+        super().__init__(message)
+        # a frase de erro que o próprio Mercado Pago devolveu (sem dados sensíveis)
+        self.mp_message = mp_message
+        self.status = status
+
+
+# Erros comuns do Mercado Pago, em português, para o dono da loja entender.
+_FRIENDLY = (
+    ("both payer and collector must be", "Em modo de teste, use o e-mail do comprador de teste do Mercado Pago."),
+    ("cannot operate between different countries", "A conta do pagador é de outro país."),
+    ("payer_email", "Confira o e-mail da conta Mercado Pago informado."),
+    ("invalid access token", "Chave do Mercado Pago inválida (MP_ACCESS_TOKEN)."),
+    ("unauthorized", "Chave do Mercado Pago inválida (MP_ACCESS_TOKEN)."),
+)
+
+
+def friendly_error(exc: "MercadoPagoError") -> str:
+    raw = (exc.mp_message or "").strip()
+    low = raw.lower()
+    for needle, text in _FRIENDLY:
+        if needle in low:
+            return f"{text} (Mercado Pago: {raw[:160]})"
+    if raw:
+        return f"O Mercado Pago recusou: {raw[:200]}"
+    return "Não foi possível falar com o Mercado Pago. Tente de novo."
 
 
 async def _request(method: str, path: str, json: dict | None = None) -> dict:
@@ -59,7 +84,14 @@ async def _request(method: str, path: str, json: dict | None = None) -> dict:
     if resp.status_code >= 400:
         # never log the token; the body only has MP's own error message
         logger.error("Mercado Pago %s %s -> %s %s", method, path, resp.status_code, resp.text[:300])
-        raise MercadoPagoError(f"Mercado Pago respondeu {resp.status_code}")
+        try:
+            body = resp.json()
+            mp_message = str(body.get("message") or body.get("error") or "")
+        except ValueError:
+            mp_message = ""
+        raise MercadoPagoError(
+            f"Mercado Pago respondeu {resp.status_code}", mp_message=mp_message, status=resp.status_code
+        )
     return resp.json()
 
 

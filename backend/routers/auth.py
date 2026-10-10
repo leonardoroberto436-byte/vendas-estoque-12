@@ -5,6 +5,7 @@ Session rides an httpOnly cookie; the org is never accepted from the client.
 """
 
 import logging
+import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -24,6 +25,7 @@ from lib.auth import (
 from lib.db import db
 from lib.email import send_password_reset, send_signup_pending
 from lib.subscriptions import days_until
+from lib.password_policy import validate_new_password
 from lib.throttle import clear_throttle, throttle
 from models.org import (
     TRIAL_DAYS,
@@ -113,6 +115,16 @@ async def signup(payload: SignupRequest, request: Request):
     can never read data or occupy a paid seat on its own.
     """
     email = payload.email.strip().lower()
+    # anti-abuso: limita cadastros por hora por IP — evita inundar o painel do
+    # dono com empresas falsas e queimar a cota de e-mail transacional.
+    # Ajustável por SIGNUP_LIMIT_PER_HOUR para rodar a suíte de testes.
+    throttle(
+        request,
+        "signup",
+        "global",
+        limit=int(os.environ.get("SIGNUP_LIMIT_PER_HOUR", "30")),
+        window=3600,
+    )
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Já existe uma conta com este e-mail.")
 
@@ -206,7 +218,11 @@ async def login(payload: LoginRequest, request: Request, response: Response):
 async def logout(
     request: Request, response: Response, ev_session: str | None = Cookie(default=None)
 ):
-    session = await db.sessions.find_one({"token": ev_session}) if ev_session else None
+    session = (
+        await db.sessions.find_one({"token_hash": hash_token(ev_session)})
+        if ev_session
+        else None
+    )
     if session:
         user = await db.users.find_one({"id": session["user_id"]})
         if user:
@@ -235,6 +251,7 @@ async def change_password(
     user = await db.users.find_one({"id": principal.id})
     if not user or not verify_password(payload.current_password, user.get("password_hash", "")):
         raise HTTPException(status_code=400, detail="Senha atual incorreta.")
+    validate_new_password(payload.new_password, current_hash=user.get("password_hash", ""))
     await db.users.update_one(
         {"id": principal.id}, {"$set": {"password_hash": hash_password(payload.new_password)}}
     )
@@ -286,6 +303,8 @@ async def forgot_password(payload: ForgotPasswordRequest, request: Request):
 @router.post("/reset-password", status_code=204)
 async def reset_password(payload: ResetPasswordRequest, request: Request):
     """Single-use token: consumed on success and all sessions are revoked."""
+    # anti-força-bruta de token: 10 tentativas por 15 min por IP
+    throttle(request, "reset", "global", limit=10, window=900)
     record = await db.password_resets.find_one(
         {"token_hash": hash_token(payload.token), "used_at": None}
     )
@@ -300,6 +319,8 @@ async def reset_password(payload: ResetPasswordRequest, request: Request):
     if not user or not user.get("is_active", False):
         raise HTTPException(status_code=400, detail="Conta indisponível. Fale com o administrador.")
 
+    # o link não pode devolver a conta para a senha antiga/vazada
+    validate_new_password(payload.password, current_hash=user.get("password_hash", ""))
     await db.users.update_one(
         {"id": user["id"]}, {"$set": {"password_hash": hash_password(payload.password)}}
     )

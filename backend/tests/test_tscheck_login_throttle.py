@@ -9,7 +9,11 @@ import os
 import uuid
 
 import httpx
+
+from tests.credentials import env
 import pytest
+
+
 
 API_URL = os.environ.get(
     "BACKEND_URL", "https://vendas-estoque-12.preview.emergentagent.com"
@@ -17,10 +21,8 @@ API_URL = os.environ.get(
 
 PASSWORD = "Empresa@2026"
 
-PLATFORM_EMAIL = os.environ.get(
-    "PLATFORM_OWNER_EMAIL", "leonardoroberto436+plataforma@gmail.com"
-)
-PLATFORM_PASSWORD = os.environ.get("PLATFORM_OWNER_PASSWORD", "Plataforma@2026")
+PLATFORM_EMAIL = env("PLATFORM_OWNER_EMAIL")
+PLATFORM_PASSWORD = env("PLATFORM_OWNER_PASSWORD")
 
 
 def _client() -> httpx.Client:

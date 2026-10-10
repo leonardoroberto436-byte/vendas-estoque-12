@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Toaster } from "@/components/ui/sonner";
 
 function Shell({ children }: { children: React.ReactNode }) {
   return (
@@ -24,7 +23,6 @@ function Shell({ children }: { children: React.ReactNode }) {
           </Link>
         </p>
       </div>
-      <Toaster richColors />
     </div>
   );
 }

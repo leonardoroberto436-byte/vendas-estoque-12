@@ -20,7 +20,6 @@ import { cn } from "@/lib/utils";
 import { endSession } from "@/lib/session";
 import { ORG_STATUS_LABELS, SUBSCRIPTION_LABELS } from "@/lib/format";
 import { useCurrentUser } from "@/lib/useCurrentUser";
-import { Toaster } from "@/components/ui/sonner";
 import { Button } from "@/components/ui/button";
 
 const NAV = [
@@ -182,7 +181,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       )}
 
       <main className="mx-auto max-w-[1400px] px-5 py-6 lg:px-8 lg:py-8">{children}</main>
-      <Toaster richColors />
     </div>
   );
 }

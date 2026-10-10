@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Toaster } from "@/components/ui/sonner";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -65,8 +64,7 @@ export default function Signup() {
             </Link>
           </CardContent>
         </Card>
-        <Toaster richColors />
-      </div>
+        </div>
     );
   }
 
@@ -186,7 +184,6 @@ export default function Signup() {
           </Link>
         </p>
       </div>
-      <Toaster richColors />
     </div>
   );
 }

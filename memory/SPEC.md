@@ -30,6 +30,18 @@ Planos: `TESTE` (14 dias, R$ 0) · `INICIAL` (R$ 49,90) · `PROFISSIONAL` (R$ 79
 - `ADMIN` (empresa): `shop:read`, `shop:write`, `products:write`, `stock:write`, `sales:create`, `returns:create`, `reports:read`, `users:manage`.
 - `OPERADOR` (vendedor): **só** `shop:read`, `sales:create`, `returns:create`, `reports:read` — não cria/edita/apaga produto, não ajusta estoque, não gerencia usuários nem a marca. Rotas de escrita usam `Depends(require("<permissão>"))`; a UI esconde os botões correspondentes (Produtos e Movimentações).
 
+## Rodada de segurança 10/10/2026 (4 itens de alta severidade)
+1. **Token de sessão em texto puro no banco** (`lib/auth.py:94` campo `token`, consultas em `:115`/`:154`/`:162`, índice `lib/db.py:58`) — um dump ou um backup baixado entregava sessões vivas. Agora só `sha256(token)` é gravado em `sessions.token_hash` (`lib/auth.py:96,117,156,164`; índice `lib/db.py:59`). Todas as sessões antigas foram apagadas.
+2. **Credenciais reais fixas no repositório** — `tests/test_tenant_isolation.py`, 5 `tests/test_tscheck_*.py`, `memory/test_credentials.md` e `.emergent/scripts/checks/*.mjs`. Agora tudo lê do ambiente (`tests/credentials.py::env()`, `process.env.*`); a suíte faz *skip* se a variável não existir.
+3. **`POST /api/auth/signup` sem limite** (`routers/auth.py:120`) — criação em massa de empresas falsas e queima da cota de e-mail. Limite `SIGNUP_LIMIT_PER_HOUR` (padrão 30/h por IP).
+4. **`POST /api/auth/reset-password` sem limite** (`routers/auth.py:305`) — força bruta de token. Limite 10/15 min por IP.
+
+Extras da mesma rodada:
+- **Política de senha** (`lib/password_policy.py`): mínimo 10 caracteres, letras + números, não pode ser igual à atual e não pode estar em `BLOCKED_PASSWORDS` (senhas que vazaram). Aplicada em `/auth/change-password`, `/auth/reset-password` e `PUT /api/users/{id}/password`.
+- **Toast global** (`main.tsx`): havia um `<Toaster>` por página; o toast disparado antes de navegar morria junto. Agora é um só, na raiz.
+- **Defensivas no front** — `PointOfSale` (lista/categorias memoizadas), `MovementDialog` (`types[0]` com fallback), `MonthlyReport` (ano/mês com `Number.isFinite`), `Login` (nome ausente), `lib/format.ts` (acesso indexado seguro).
+- **Conta de QA** `COMPANY_ADMIN_*` (ADMIN da "Minha Loja"): a suíte não usa mais a conta pessoal do dono.
+
 ## Endurecimento de segurança (auditoria 09/10/2026 — `/app/test_reports/security_audit.md`)
 - `CORS_ORIGINS` com origem explícita (nunca `*` com credenciais).
 - Cookie de sessão: `HttpOnly` + `Secure` + `SameSite=Lax` → **testes precisam usar HTTPS**.

@@ -16,7 +16,11 @@ import uuid
 from contextlib import contextmanager
 
 import httpx
+
+from tests.credentials import env
 import pytest
+
+
 
 # Session cookies are Secure, so the suite must talk HTTPS (the public URL) —
 # over plain http the cookie is never stored and every call would be a 401.
@@ -24,10 +28,8 @@ API_URL = os.environ.get(
     "BACKEND_URL", "https://vendas-estoque-12.preview.emergentagent.com"
 ) + "/api"
 
-PLATFORM_EMAIL = os.environ.get(
-    "PLATFORM_OWNER_EMAIL", "leonardoroberto436+plataforma@gmail.com"
-)
-PLATFORM_PASSWORD = os.environ.get("PLATFORM_OWNER_PASSWORD", "Plataforma@2026")
+PLATFORM_EMAIL = env("PLATFORM_OWNER_EMAIL")
+PLATFORM_PASSWORD = env("PLATFORM_OWNER_PASSWORD")
 
 PASSWORD = "Empresa@2026"
 SHARED_SKU = "SKU-COMPARTILHADO"
@@ -545,8 +547,9 @@ def test_overdue_subscription_still_allows_access():
 # --------------------------------------------------------------- legacy tenant
 def test_legacy_company_data_survived_the_migration():
     """The pre-SaaS data must still belong to the original owner and be intact."""
-    email = os.environ.get("ADMIN_EMAIL", "leonardoroberto436@gmail.com")
-    password = os.environ.get("ADMIN_PASSWORD", "Lrsg2121@")
+    # conta de QA (ADMIN da "Minha Loja") — a suíte não usa a conta pessoal do dono
+    email = env("COMPANY_ADMIN_EMAIL")
+    password = env("COMPANY_ADMIN_PASSWORD")
     with _session(email, password) as shop:
         me = shop.get("/auth/me").json()
         assert me["role"] == "ADMIN"

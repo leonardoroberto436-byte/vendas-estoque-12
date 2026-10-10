@@ -51,8 +51,12 @@ export default function MonthlyReportPage() {
     refetchOnWindowFocus: false,
   });
   const months = monthError ? [] : (monthData ?? []);
-  const active = selected || (months.length > 0 ? keyOf(months[0]) : "");
-  const [year, month] = active ? active.split("-").map(Number) : [undefined, undefined];
+  const firstMonth = months.at(0);
+  const active = selected || (firstMonth ? keyOf(firstMonth) : "");
+  // split/indexado pode devolver undefined ou NaN — só consultamos com ano e mês válidos
+  const parts = active ? active.split("-").map(Number) : [];
+  const year = Number.isFinite(parts.at(0)) ? parts.at(0) : undefined;
+  const month = Number.isFinite(parts.at(1)) ? parts.at(1) : undefined;
 
   const { data: reportData, isError: reportError } = useQuery({
     queryKey: ["monthly-report", year, month],

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { apiPost } from "@/lib/api";
@@ -43,20 +43,22 @@ export default function MovementDialog({
   presetProductId,
 }: Props) {
   const queryClient = useQueryClient();
-  const types = mode === "ENTRADA" ? ENTRY_TYPES : ADJUST_TYPES;
+  const types = useMemo(() => (mode === "ENTRADA" ? ENTRY_TYPES : ADJUST_TYPES), [mode]);
+  // acesso indexado pode ser undefined — o fallback evita estado inválido
+  const defaultType: MovementType = types[0] ?? "ENTRADA";
   const [productId, setProductId] = useState(presetProductId ?? "");
-  const [type, setType] = useState<MovementType>(types[0]);
+  const [type, setType] = useState<MovementType>(defaultType);
   const [quantity, setQuantity] = useState("1");
   const [reason, setReason] = useState("");
 
   useEffect(() => {
     if (open) {
       setProductId(presetProductId ?? "");
-      setType(mode === "ENTRADA" ? "ENTRADA" : "AJUSTE_POSITIVO");
+      setType(defaultType);
       setQuantity("1");
       setReason("");
     }
-  }, [open, presetProductId, mode]);
+  }, [open, presetProductId, defaultType]);
 
   const prefix = mode === "ENTRADA" ? "stock-in" : "stock-adjust";
 

@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from lib.auth import Principal, hash_password, require, scoped
 from lib.db import db
+from lib.password_policy import validate_new_password
 from models.users import AccessLog, PasswordReset, User, UserCreate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -130,6 +131,7 @@ async def reset_password(
     doc = await db.users.find_one(scoped(principal, {"id": user_id}))
     if not doc:
         raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    validate_new_password(payload.password, current_hash=doc.get("password_hash", ""))
     await db.users.update_one(
         scoped(principal, {"id": user_id}),
         {"$set": {"password_hash": hash_password(payload.password)}},

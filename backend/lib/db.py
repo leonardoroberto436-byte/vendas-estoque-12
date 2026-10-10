@@ -55,7 +55,8 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("org_id", ASCENDING), ("created_at", ASCENDING)], name="org_created"),
     ],
     "sessions": [
-        IndexModel([("token", ASCENDING)], name="token", unique=True),
+        # só o hash do token é guardado (ver lib/auth.create_session)
+        IndexModel([("token_hash", ASCENDING)], name="token_hash", unique=True),
         IndexModel([("user_id", ASCENDING)], name="user_id"),
         IndexModel([("expires_at", ASCENDING)], name="expires_ttl", expireAfterSeconds=0),
     ],

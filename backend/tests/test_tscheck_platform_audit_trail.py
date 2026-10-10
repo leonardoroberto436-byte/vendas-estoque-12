@@ -15,18 +15,20 @@ import os
 import uuid
 
 import httpx
+
+from tests.credentials import env
 import pytest
+
+
 
 API_URL = os.environ.get(
     "BACKEND_URL", "https://vendas-estoque-12.preview.emergentagent.com"
 ) + "/api"
 
-PLATFORM_EMAIL = os.environ.get(
-    "PLATFORM_OWNER_EMAIL", "leonardoroberto436+plataforma@gmail.com"
-)
-PLATFORM_PASSWORD = os.environ.get("PLATFORM_OWNER_PASSWORD", "Plataforma@2026")
-ADMIN_EMAIL = os.environ.get("COMPANY_ADMIN_EMAIL", "leonardoroberto436@gmail.com")
-ADMIN_PASSWORD = os.environ.get("COMPANY_ADMIN_PASSWORD", "Lrsg2121@")
+PLATFORM_EMAIL = env("PLATFORM_OWNER_EMAIL")
+PLATFORM_PASSWORD = env("PLATFORM_OWNER_PASSWORD")
+ADMIN_EMAIL = env("COMPANY_ADMIN_EMAIL")
+ADMIN_PASSWORD = env("COMPANY_ADMIN_PASSWORD")
 SIGNUP_PASSWORD = "Empresa@2026"
 
 

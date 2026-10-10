@@ -59,7 +59,6 @@ import { endSession } from "@/lib/session";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Toaster } from "@/components/ui/sonner";
 import {
   Select,
   SelectContent,
@@ -1115,7 +1114,6 @@ export default function Platform() {
           )}
         </DialogContent>
       </Dialog>
-      <Toaster richColors />
     </div>
   );
 }

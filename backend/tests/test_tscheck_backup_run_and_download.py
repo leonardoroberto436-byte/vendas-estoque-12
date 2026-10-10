@@ -13,18 +13,18 @@ Run: cd /app/backend && python -m pytest tests/test_tscheck_backup_run_and_downl
 import os
 
 import httpx
+
+from tests.credentials import env
 import pytest
 
 API_URL = os.environ.get(
     "BACKEND_URL", "https://vendas-estoque-12.preview.emergentagent.com"
 ) + "/api"
 
-PLATFORM_EMAIL = os.environ.get(
-    "PLATFORM_OWNER_EMAIL", "leonardoroberto436+plataforma@gmail.com"
-)
-PLATFORM_PASSWORD = os.environ.get("PLATFORM_OWNER_PASSWORD", "Plataforma@2026")
-ADMIN_EMAIL = os.environ.get("COMPANY_ADMIN_EMAIL", "leonardoroberto436@gmail.com")
-ADMIN_PASSWORD = os.environ.get("COMPANY_ADMIN_PASSWORD", "Lrsg2121@")
+PLATFORM_EMAIL = env("PLATFORM_OWNER_EMAIL")
+PLATFORM_PASSWORD = env("PLATFORM_OWNER_PASSWORD")
+ADMIN_EMAIL = env("COMPANY_ADMIN_EMAIL")
+ADMIN_PASSWORD = env("COMPANY_ADMIN_PASSWORD")
 
 
 def _client() -> httpx.Client:
@@ -81,6 +81,8 @@ def test_owner_can_run_list_and_download_backup(owner):
 )
 def test_backup_download_blocks_path_traversal(owner, traversal_name):
     import urllib.parse
+
+
 
     encoded = urllib.parse.quote(traversal_name, safe="")
     resp = owner.get(f"/platform/backups/{encoded}/download")

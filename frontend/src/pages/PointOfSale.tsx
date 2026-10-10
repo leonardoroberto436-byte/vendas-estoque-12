@@ -62,7 +62,9 @@ export default function PointOfSale() {
     refetchOnWindowFocus: false,
   });
 
-  const list = isError ? [] : (products ?? []);
+  // `products` é a referência estável vinda do cache; derivar a lista dentro do
+  // useMemo evita recriar o array (e re-executar o memo) em todo render.
+  const list = useMemo(() => (isError ? [] : (products ?? [])), [isError, products]);
   const categories = useMemo(
     () => ["TODAS", ...Array.from(new Set(list.map((p) => p.category))).sort()],
     [list],

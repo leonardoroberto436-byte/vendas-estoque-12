@@ -159,9 +159,10 @@ export function errorMessage(error: unknown, fallback = "Não foi possível conc
     const body = error.body as { detail?: unknown } | null;
     const detail = body?.detail;
     if (typeof detail === "string") return detail;
-    if (Array.isArray(detail) && detail.length > 0) {
-      const first = detail[0] as { msg?: string };
-      if (first?.msg) return first.msg;
+    if (Array.isArray(detail)) {
+      // acesso indexado pode ser undefined mesmo com length > 0 (array esparso)
+      const first = detail.at(0) as { msg?: unknown } | undefined;
+      if (first && typeof first.msg === "string" && first.msg) return first.msg;
     }
   }
   if (error instanceof Error && error.message) return fallback;

@@ -11,7 +11,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Toaster } from "@/components/ui/sonner";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -24,7 +23,8 @@ export default function Login() {
       apiPost<SessionUser>("/auth/login", { email: email.trim(), password }),
     onSuccess: (user) => {
       beginSession();
-      toast.success(`Bem-vindo, ${user.name.split(" ")[0]}!`);
+      const firstName = user?.name?.trim().split(" ").at(0);
+      toast.success(firstName ? `Bem-vindo, ${firstName}!` : "Bem-vindo!");
       // the SaaS owner has no shop workspace — straight to the platform area
       navigate(user.role === "PLATFORM_OWNER" ? "/plataforma" : "/", { replace: true });
     },
@@ -153,7 +153,6 @@ export default function Login() {
           </p>
         </div>
       </div>
-      <Toaster richColors />
     </div>
   );
 }

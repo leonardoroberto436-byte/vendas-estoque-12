@@ -81,7 +81,8 @@ def verify_password(password: str, stored: str) -> bool:
 
 
 def hash_token(token: str) -> str:
-    """Reset tokens are stored hashed — a DB leak must not hand over live links."""
+    """Reset AND session tokens are stored hashed — a DB leak (or a downloadable
+    backup) must never hand over live links or live sessions."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -91,7 +92,8 @@ async def create_session(user_id: str, response: Response) -> str:
     await db.sessions.insert_one(
         {
             "id": str(uuid.uuid4()),
-            "token": token,
+            # only the hash is persisted; the raw token lives in the cookie
+            "token_hash": hash_token(token),
             "user_id": user_id,
             "created_at": datetime.now(timezone.utc),
             "expires_at": datetime.now(timezone.utc) + timedelta(days=SESSION_DAYS),
@@ -112,7 +114,7 @@ async def create_session(user_id: str, response: Response) -> str:
 
 async def destroy_session(token: str | None, response: Response) -> None:
     if token:
-        await db.sessions.delete_many({"token": token})
+        await db.sessions.delete_many({"token_hash": hash_token(token)})
     response.delete_cookie(SESSION_COOKIE, path="/")
 
 
@@ -151,7 +153,7 @@ async def get_current_user(ev_session: str | None = Cookie(default=None)) -> Pri
     if not ev_session:
         raise HTTPException(status_code=401, detail="Sessão expirada. Faça login novamente.")
 
-    session = await db.sessions.find_one({"token": ev_session})
+    session = await db.sessions.find_one({"token_hash": hash_token(ev_session)})
     if not session:
         raise HTTPException(status_code=401, detail="Sessão inválida. Faça login novamente.")
 
@@ -159,7 +161,7 @@ async def get_current_user(ev_session: str | None = Cookie(default=None)) -> Pri
     if isinstance(expires, datetime) and expires.tzinfo is None:
         expires = expires.replace(tzinfo=timezone.utc)
     if expires < datetime.now(timezone.utc):
-        await db.sessions.delete_many({"token": ev_session})
+        await db.sessions.delete_many({"token_hash": hash_token(ev_session)})
         raise HTTPException(status_code=401, detail="Sessão expirada. Faça login novamente.")
 
     user = await db.users.find_one({"id": session["user_id"]})

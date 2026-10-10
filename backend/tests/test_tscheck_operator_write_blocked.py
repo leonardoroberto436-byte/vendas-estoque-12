@@ -13,7 +13,11 @@ import uuid
 from contextlib import contextmanager
 
 import httpx
+
+from tests.credentials import env
 import pytest
+
+
 
 API_URL = os.environ.get(
     "BACKEND_URL", "https://vendas-estoque-12.preview.emergentagent.com"
@@ -53,10 +57,8 @@ def _session(email: str, password: str):
         c.close()
 
 
-PLATFORM_EMAIL = os.environ.get(
-    "PLATFORM_OWNER_EMAIL", "leonardoroberto436+plataforma@gmail.com"
-)
-PLATFORM_PASSWORD = os.environ.get("PLATFORM_OWNER_PASSWORD", "Plataforma@2026")
+PLATFORM_EMAIL = env("PLATFORM_OWNER_EMAIL")
+PLATFORM_PASSWORD = env("PLATFORM_OWNER_PASSWORD")
 
 
 @pytest.fixture

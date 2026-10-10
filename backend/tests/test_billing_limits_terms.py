@@ -293,3 +293,34 @@ def test_full_subscription_cycle(fake_mp):
             assert revenue["received_last_30d"] >= 64.5
     finally:
         _cleanup(info)
+
+
+@needs_fake_mp
+def test_card_form_subscription_activates_without_mercadopago_account(fake_mp):
+    """Cartão digitado no site (token do formulário oficial): ativa na hora,
+    sem o cliente precisar de conta no Mercado Pago."""
+    info = _company("card")
+    try:
+        with _session(info["email"], PASSWORD) as admin:
+            billing = admin.get("/billing").json()
+            assert billing["mp_public_key"]  # formulário de cartão ligado
+
+            refused = admin.post("/billing/subscribe", json={"plan": "INICIAL", "card_token": "recusado-123"})
+            assert refused.status_code == 400, refused.text
+            assert "limite" in refused.json()["detail"].lower()
+
+            ok = admin.post("/billing/subscribe", json={"plan": "INICIAL", "card_token": "tok-abc-123"})
+            assert ok.status_code == 200, ok.text
+            assert ok.json()["activated"] is True and ok.json()["checkout_url"] == ""
+            sent = next(v for v in fake_mp["preapprovals"].values()
+                        if v.get("external_reference") == info["org_id"])
+            assert sent["card_token_id"] == "tok-abc-123" and sent["status"] == "authorized"
+
+            billing = admin.get("/billing").json()
+            assert billing["subscription_status"] == "ATIVO" and billing["plan"] == "INICIAL"
+            assert billing["mp_status"] == "authorized"
+
+            again = admin.post("/billing/subscribe", json={"plan": "INICIAL", "card_token": "tok-2"})
+            assert again.status_code == 409  # já está ativa
+    finally:
+        _cleanup(info)

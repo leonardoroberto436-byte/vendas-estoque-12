@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { AlertTriangle, BadgeCheck, CreditCard, Loader2, Lock, Sparkles } from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiPost } from "@/lib/api";
+import { ApiError, apiGet, apiPost } from "@/lib/api";
+import { useCurrentUser } from "@/lib/useCurrentUser";
+import CardSubscribeDialog from "@/components/CardSubscribeDialog";
 import type { BillingInfo, PaidPlan, PlanLimit, SubscribeResponse } from "@/lib/types";
 import { PLAN_LABELS, SUBSCRIPTION_LABELS, errorMessage, formatDateTime, money } from "@/lib/format";
 import AppShell from "@/components/AppShell";
@@ -75,6 +77,9 @@ export default function Subscription() {
   const [payerEmail, setPayerEmail] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [changing, setChanging] = useState<PaidPlan | null>(null);
+  // plano escolhido para pagar com o cartão digitado no site
+  const [cardPlan, setCardPlan] = useState<PaidPlan | null>(null);
+  const { user } = useCurrentUser();
 
   const { data: info, isLoading, isError, error } = useQuery({
     queryKey: ["billing"],
@@ -106,6 +111,32 @@ export default function Subscription() {
     },
     onError: (err) => toast.error(errorMessage(err, "Não foi possível iniciar a assinatura")),
   });
+
+  // Cartão digitado no formulário do Mercado Pago dentro do site: o servidor
+  // cria a assinatura com o token e, se aprovado, a loja é liberada na hora.
+  const subscribeWithCard = async (plan: PaidPlan, token: string, email: string) => {
+    try {
+      const result = await apiPost<SubscribeResponse>("/billing/subscribe", {
+        plan,
+        coupon: coupon.trim(),
+        payer_email: email || null,
+        card_token: token,
+      });
+      setCardPlan(null);
+      toast.success(result.message);
+      void queryClient.invalidateQueries({ queryKey: ["billing"] });
+      void queryClient.invalidateQueries({ queryKey: ["auth-me"] });
+    } catch (err) {
+      const message =
+        err instanceof ApiError ? errorMessage(err, "Pagamento não aprovado.") : "Pagamento não aprovado.";
+      throw new Error(message);
+    }
+  };
+
+  const startSubscription = (plan: PaidPlan) => {
+    if (info?.mp_public_key) setCardPlan(plan);
+    else subscribe.mutate(plan);
+  };
 
   const changePlan = useMutation({
     mutationFn: (plan: PaidPlan) => apiPost<BillingInfo>("/billing/change-plan", { plan }),
@@ -329,7 +360,7 @@ export default function Subscription() {
                       <Button
                         className="mt-5"
                         disabled={subscribe.isPending}
-                        onClick={() => subscribe.mutate(plan)}
+                        onClick={() => startSubscription(plan)}
                         data-testid={`billing-subscribe-${plan}`}
                       >
                         <CreditCard className="size-4" />
@@ -361,7 +392,11 @@ export default function Subscription() {
                   </p>
                 </div>
                 <div className="grid gap-1.5">
-                  <Label htmlFor="billing-payer">E-mail da conta Mercado Pago (opcional)</Label>
+                  <Label htmlFor="billing-payer">
+                    {info.mp_public_key
+                      ? "E-mail da conta Mercado Pago (só se for pagar por ela)"
+                      : "E-mail da conta Mercado Pago (opcional)"}
+                  </Label>
                   <Input
                     id="billing-payer"
                     type="email"
@@ -378,6 +413,23 @@ export default function Subscription() {
             </Card>
           )}
         </>
+      )}
+
+      {cardPlan && info.mp_public_key && (
+        <CardSubscribeDialog
+          open
+          onOpenChange={(open) => !open && setCardPlan(null)}
+          publicKey={info.mp_public_key}
+          planLabel={PLAN_LABELS[cardPlan]}
+          amount={priceFor(cardPlan)}
+          email={user?.email ?? ""}
+          onCardToken={(token, email) => subscribeWithCard(cardPlan, token, email)}
+          onUseMercadoPagoAccount={() => {
+            const plan = cardPlan;
+            setCardPlan(null);
+            subscribe.mutate(plan);
+          }}
+        />
       )}
 
       <Dialog open={changing !== null} onOpenChange={(open) => !open && setChanging(null)}>

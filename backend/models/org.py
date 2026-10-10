@@ -350,6 +350,8 @@ class BillingInfo(BaseModel):
     plan_next: str = ""
     billing_block: str = ""
     billing_enabled: bool = False
+    # Public Key do Mercado Pago para o formulário de cartão (vazio = desligado)
+    mp_public_key: str = ""
     founder_slots_left: int = 0
     prices: dict[str, float]
     limits: dict[str, PlanLimit]
@@ -361,11 +363,16 @@ class SubscribeRequest(BaseModel):
     coupon: str = Field(default="", max_length=30)
     # e-mail da conta Mercado Pago de quem vai pagar (padrão: o e-mail do admin)
     payer_email: Optional[EmailStr] = None
+    # token do cartão gerado pelo formulário oficial do Mercado Pago no navegador
+    # (o número do cartão nunca chega ao nosso servidor)
+    card_token: str = Field(default="", max_length=300)
 
 
 class SubscribeResponse(BaseModel):
-    checkout_url: str
+    checkout_url: str = ""
     message: str
+    # True quando o cartão foi aprovado na hora (formulário no site)
+    activated: bool = False
 
 
 class ChangePlanRequest(BaseModel):

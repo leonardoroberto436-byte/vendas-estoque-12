@@ -38,11 +38,15 @@ class _Handler(BaseHTTPRequestHandler):
         if self.path == "/preapproval":
             if not self._auth_ok():
                 return self._send(401, {"message": "unauthorized"})
+            token = body.get("card_token_id") or ""
+            if token.startswith("recusado"):
+                return self._send(400, {"message": "cc_rejected_insufficient_amount", "status": 400})
             pid = uuid.uuid4().hex[:16]
             item = {
                 **body,
                 "id": pid,
-                "status": "pending",
+                "status": "authorized" if token else "pending",
+                "next_payment_date": "2030-01-01T00:00:00.000-03:00" if token else None,
                 "init_point": f"https://www.mercadopago.com.br/subscriptions/checkout?preapproval_id={pid}",
             }
             STATE["preapprovals"][pid] = item

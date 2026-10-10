@@ -535,6 +535,8 @@ export interface BillingInfo {
   plan_next: string;
   billing_block: string;
   billing_enabled: boolean;
+  /** Public Key do formulário de cartão; vazio = só o checkout do Mercado Pago */
+  mp_public_key: string;
   founder_slots_left: number;
   prices: Record<PaidPlan, number>;
   limits: Record<PaidPlan, PlanLimit>;
@@ -544,6 +546,8 @@ export interface BillingInfo {
 export interface SubscribeResponse {
   checkout_url: string;
   message: string;
+  /** cartão aprovado na hora (formulário no site) */
+  activated: boolean;
 }
 
 export interface PlanLimits {

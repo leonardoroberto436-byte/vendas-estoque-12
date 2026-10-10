@@ -87,6 +87,7 @@ async def billing_info(principal: Principal = Depends(require_billing_admin)):
         plan_next=billing.get("plan_next") or "",
         billing_block=billing_block(org),
         billing_enabled=mp.configured(),
+        mp_public_key=mp.public_key() if mp.configured() else "",
         founder_slots_left=await founder_slots_left(),
         prices={p: prices.get(p, 0.0) for p in PAID_PLANS},
         limits={
@@ -131,14 +132,16 @@ async def subscribe(payload: SubscribeRequest, principal: Principal = Depends(re
             payer_email=str(payload.payer_email or principal.email),
             amount=amount,
             back_url=f"{base}/assinatura?retorno=mercadopago",
+            card_token=payload.card_token.strip(),
         )
     except mp.MercadoPagoError as exc:
         logger.error("Criação de assinatura falhou para %s: %s", org["id"], exc)
         raise HTTPException(status_code=400, detail=mp.friendly_error(exc))
 
+    with_card = bool(payload.card_token.strip())
     checkout = preapproval.get("init_point") or ""
-    if not preapproval.get("id") or not checkout:
-        raise HTTPException(status_code=502, detail="O Mercado Pago não devolveu o link de pagamento.")
+    if not preapproval.get("id") or (not with_card and not checkout):
+        raise HTTPException(status_code=400, detail="O Mercado Pago não devolveu o link de pagamento.")
 
     await db.organizations.update_one(
         {"id": org["id"]},
@@ -160,6 +163,16 @@ async def subscribe(payload: SubscribeRequest, principal: Principal = Depends(re
         target=org.get("name", ""),
         details=f"plano {payload.plan} · R$ {amount:.2f}" + (f" · cupom {coupon}" if coupon else ""),
     )
+    if with_card:
+        if preapproval.get("status") == "authorized":
+            await apply_preapproval(preapproval)
+            return SubscribeResponse(
+                activated=True,
+                message="Pagamento aprovado! Sua assinatura está ativa.",
+            )
+        return SubscribeResponse(
+            message="Recebemos seu cartão. A confirmação do Mercado Pago chega em alguns minutos.",
+        )
     return SubscribeResponse(
         checkout_url=checkout,
         message="Você será levado ao Mercado Pago para cadastrar o cartão.",

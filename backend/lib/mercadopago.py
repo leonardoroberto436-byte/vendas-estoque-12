@@ -30,6 +30,13 @@ def access_token() -> str:
     return token if token.startswith(("TEST-", "APP_USR-")) else ""
 
 
+def public_key() -> str:
+    """Public Key do formulário de cartão (feita para ficar no site). Só vale
+    um valor de verdade; vazio = formulário desligado, usa o checkout do MP."""
+    key = os.environ.get("MP_PUBLIC_KEY", "").strip()
+    return key if key.startswith(("TEST-", "APP_USR-")) else ""
+
+
 def webhook_secret() -> str:
     return os.environ.get("MP_WEBHOOK_SECRET", "").strip()
 
@@ -48,6 +55,16 @@ class MercadoPagoError(Exception):
 
 # Erros comuns do Mercado Pago, em português, para o dono da loja entender.
 _FRIENDLY = (
+    ("insufficient", "Cartão sem limite suficiente. Tente outro cartão."),
+    ("bad_filled", "Dados do cartão incorretos. Confira número, validade, código e CPF."),
+    ("call_for_authorize", "O banco pediu autorização: ligue para o banco do cartão e tente de novo."),
+    ("card_disabled", "Cartão bloqueado ou desativado. Fale com o banco ou use outro cartão."),
+    ("high_risk", "O pagamento foi recusado por segurança. Tente outro cartão."),
+    ("duplicated", "Pagamento duplicado. Aguarde alguns minutos antes de tentar de novo."),
+    ("max_attempts", "Muitas tentativas com este cartão. Use outro cartão ou tente mais tarde."),
+    ("card_token", "Os dados do cartão expiraram. Preencha o cartão de novo."),
+    ("cc_val", "O Mercado Pago não validou o cartão. Confira os dados ou use outro cartão."),
+    ("cc_rejected", "Cartão recusado pelo banco. Tente outro cartão."),
     ("payer and collector cannot be the same", "O e-mail do pagador é o da própria conta que recebe os pagamentos. Use a conta Mercado Pago de outra pessoa."),
     ("user bad request", "O Mercado Pago não aceitou o e-mail do pagador. Use o e-mail de uma conta Mercado Pago real."),
     ("both payer and collector must be", "Em modo de teste, use o e-mail do comprador de teste do Mercado Pago."),
@@ -63,7 +80,7 @@ def friendly_error(exc: "MercadoPagoError") -> str:
     low = raw.lower()
     for needle, text in _FRIENDLY:
         if needle in low:
-            return f"{text} (Mercado Pago: {raw[:160]})"
+            return text  # o código técnico do MP fica só no log
     if raw:
         return f"O Mercado Pago recusou: {raw[:200]}"
     return "Não foi possível falar com o Mercado Pago. Tente de novo."
@@ -98,7 +115,13 @@ async def _request(method: str, path: str, json: dict | None = None) -> dict:
 
 
 async def create_preapproval(
-    *, reason: str, external_reference: str, payer_email: str, amount: float, back_url: str
+    *,
+    reason: str,
+    external_reference: str,
+    payer_email: str,
+    amount: float,
+    back_url: str,
+    card_token: str = "",
 ) -> dict:
     """Assinatura sem plano associado, com pagamento pendente: o MP devolve um
     `init_point` (link do checkout) onde o cliente cadastra o cartão."""
@@ -115,6 +138,11 @@ async def create_preapproval(
         "back_url": back_url,
         "status": "pending",
     }
+    if card_token:
+        # cartão digitado no formulário do próprio site (sem conta Mercado Pago):
+        # a assinatura já nasce autorizada e a primeira cobrança sai na hora
+        body["card_token_id"] = card_token
+        body["status"] = "authorized"
     return await _request("POST", "/preapproval", body)
 
 

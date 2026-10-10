@@ -100,6 +100,12 @@ api_router.include_router(billing.router)
 # Include the router in the main app
 app.include_router(api_router)
 
+
+@app.get("/health", include_in_schema=False)
+async def health():
+    # a hospedagem consulta /health para saber se o servidor está de pé
+    return {"status": "ok"}
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

@@ -48,6 +48,8 @@ class MercadoPagoError(Exception):
 
 # Erros comuns do Mercado Pago, em português, para o dono da loja entender.
 _FRIENDLY = (
+    ("payer and collector cannot be the same", "O e-mail do pagador é o da própria conta que recebe os pagamentos. Use a conta Mercado Pago de outra pessoa."),
+    ("user bad request", "O Mercado Pago não aceitou o e-mail do pagador. Use o e-mail de uma conta Mercado Pago real."),
     ("both payer and collector must be", "Em modo de teste, use o e-mail do comprador de teste do Mercado Pago."),
     ("cannot operate between different countries", "A conta do pagador é de outro país."),
     ("payer_email", "Confira o e-mail da conta Mercado Pago informado."),

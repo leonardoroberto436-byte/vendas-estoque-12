@@ -269,3 +269,28 @@ def test_company_admin_cannot_use_owner_removal():
             assert resp.status_code == 403
     finally:
         _cleanup(info)
+
+
+def test_deleted_company_comes_back_from_backup():
+    info = _approved_company("undo")
+    with _session(info["email"], PASSWORD) as admin:
+        _product(admin)
+    with _session(PLATFORM_EMAIL, PLATFORM_PASSWORD) as owner:
+        backup = owner.post("/platform/backups/run").json()["file"]
+        owner.request(
+            "DELETE", f"/platform/organizations/{info['org_id']}", json={"confirm_name": info["name"]}
+        )
+        listed = owner.get(f"/platform/backups/{backup}/organizations").json()
+        entry = next(o for o in listed if o["id"] == info["org_id"])
+        assert entry["exists_now"] is False
+
+        back = owner.post(
+            f"/platform/backups/{backup}/restore", json={"org_id": info["org_id"], "confirm": True}
+        )
+        assert back.status_code == 200, back.text
+        assert back.json()["applied"] is True
+    try:
+        with _session(info["email"], PASSWORD) as admin:
+            assert len(admin.get("/products").json()) == 1
+    finally:
+        _cleanup(info)

@@ -572,6 +572,28 @@ async def download_backup(file_name: str):
     return FileResponse(path, media_type="application/gzip", filename=path.name)
 
 
+@router.get("/backups/{file_name}/organizations")
+async def organizations_in_backup(file_name: str):
+    """Empresas que existem neste backup — inclusive as que já foram excluídas,
+    para o dono poder trazê-las de volta pelo painel."""
+    try:
+        path = backup_path(file_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado")
+    try:
+        data = await asyncio.to_thread(read_archive, path)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Leitura do backup %s falhou: %s", file_name, exc)
+        raise HTTPException(status_code=400, detail="Não foi possível ler este arquivo de backup.")
+    current = {o["id"] for o in await db.organizations.find({}, {"id": 1}).to_list(5000)}
+    orgs = sorted(data.get("organizations", []), key=lambda o: o.get("name", "").lower())
+    return [
+        {"id": o["id"], "name": o.get("name", ""), "exists_now": o["id"] in current}
+        for o in orgs
+        if o.get("id")
+    ]
+
+
 @router.post("/backups/{file_name}/restore", response_model=RestoreResult)
 async def restore_org_from_backup(
     file_name: str, payload: RestoreOrgRequest, principal: Principal = Depends(_owner)

@@ -162,6 +162,15 @@ export default function Platform() {
     queryFn: () => apiGet<BackupSettings>("/platform/backups/settings"),
     refetchOnWindowFocus: false,
   });
+  const { data: backupOrgs } = useQuery({
+    queryKey: ["platform-backup-orgs", restoreBackup?.file],
+    queryFn: () =>
+      apiGet<{ id: string; name: string; exists_now: boolean }[]>(
+        `/platform/backups/${restoreBackup?.file}/organizations`,
+      ),
+    enabled: restoreBackup !== null,
+    refetchOnWindowFocus: false,
+  });
   const { data: userData } = useQuery({
     queryKey: ["platform-users"],
     queryFn: () => apiGet<PlatformUserView[]>("/platform/users"),
@@ -1451,20 +1460,23 @@ export default function Platform() {
             >
               <SelectTrigger data-testid="platform-restore-org-select">
                 <SelectValue>
-                  {(value) => orgs.find((org) => org.id === value)?.name ?? "Escolha a empresa"}
+                  {(value) =>
+                    (backupOrgs ?? []).find((org) => org.id === value)?.name ?? "Escolha a empresa"
+                  }
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {orgs.map((org) => (
+                {(backupOrgs ?? []).map((org) => (
                   <SelectItem key={org.id} value={org.id}>
                     {org.name}
+                    {!org.exists_now && " (excluída)"}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             <p className="text-xs text-muted-foreground">
-              Empresa excluída por engano? Ela não aparece na lista — peça ao suporte técnico para
-              restaurar pelo script com o id dela.
+              A lista mostra as empresas que existem neste backup — inclusive as excluídas, que
+              voltam com usuários e dados.
             </p>
           </div>
           {restorePreview && (

@@ -42,7 +42,7 @@ const FEATURES = [
   {
     icon: Barcode,
     title: "Caixa rápido com leitor",
-    text: "Passou o leitor de código de barras, o produto entra no carrinho. Também busca por nome ou código da peça.",
+    text: "Passou o leitor de código de barras, o produto entra no carrinho. Também busca por nome ou código do produto.",
   },
   {
     icon: Store,
@@ -62,7 +62,7 @@ const FEATURES = [
   {
     icon: FileSpreadsheet,
     title: "Traga seus produtos da planilha",
-    text: "Importe o cadastro do Excel em minutos. Não precisa digitar peça por peça.",
+    text: "Importe o cadastro do Excel em minutos. Não precisa digitar produto por produto.",
   },
   {
     icon: MessageCircle,
@@ -176,7 +176,7 @@ export default function Landing() {
         <div className="mx-auto grid max-w-6xl items-center gap-10 px-4 pb-16 pt-12 sm:px-6 lg:grid-cols-[1fr_1.15fr] lg:pb-24 lg:pt-20">
           <div>
             <p className="inline-flex items-center gap-2 rounded-full border border-teal-200 bg-white px-3 py-1 text-xs font-semibold text-teal-800">
-              Feito para lojas de autopeças e comércio de balcão
+              Para lojas com balcão: autopeças, cosméticos, roupas, utilidades e mais
             </p>
             <h1 className="mt-5 text-4xl font-extrabold leading-[1.08] tracking-tight sm:text-5xl">
               Seu balcão organizado: venda rápido e saiba o que repor.
@@ -222,7 +222,7 @@ export default function Landing() {
               </div>
               <img
                 src="/landing/caixa.jpg"
-                alt="Tela do caixa com produtos de autopeças e carrinho de venda"
+                alt="Tela do caixa com produtos e carrinho de venda"
                 className="block w-full"
                 width={2040}
                 height={1230}
@@ -270,7 +270,7 @@ export default function Landing() {
             {
               img: "/landing/produtos.jpg",
               alt: "Catálogo de produtos com preço, margem e situação do estoque",
-              title: "Preço, margem e estoque de cada peça",
+              title: "Preço, margem e estoque de cada produto",
               text: "Veja a margem de lucro de cada produto e a situação do estoque de um jeito fácil de entender.",
             },
             {

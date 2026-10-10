@@ -24,6 +24,7 @@ from datetime import datetime, timedelta, timezone
 
 from fastapi import Cookie, Depends, HTTPException, Response
 
+from lib.billing import BLOCK_MESSAGES, billing_block
 from lib.db import db
 
 SESSION_COOKIE = "ev_session"
@@ -147,6 +148,9 @@ class Principal:
     role: str
     org_id: str | None
     org_name: str
+    # cobrança pendente (teste encerrado / suspensa por pagamento / cancelada):
+    # o ADMIN entra, mas só acessa "Minha assinatura"
+    billing_block: str
 
     def __init__(
         self,
@@ -156,6 +160,7 @@ class Principal:
         role: str,
         org_id: str | None = None,
         org_name: str = "",
+        billing_block: str = "",
     ) -> None:
         self.id = id
         self.name = name
@@ -163,6 +168,7 @@ class Principal:
         self.role = role
         self.org_id = org_id
         self.org_name = org_name
+        self.billing_block = billing_block
 
     @property
     def is_platform_owner(self) -> bool:
@@ -190,6 +196,7 @@ async def get_current_user(ev_session: str | None = Cookie(default=None)) -> Pri
         raise HTTPException(status_code=403, detail="Acesso bloqueado pelo administrador.")
 
     org_name = ""
+    block = ""
     org_id = user.get("org_id")
     if user["role"] != ROLE_PLATFORM_OWNER:
         if not org_id:
@@ -197,19 +204,19 @@ async def get_current_user(ev_session: str | None = Cookie(default=None)) -> Pri
         org = await db.organizations.find_one({"id": org_id})
         if not org:
             raise HTTPException(status_code=403, detail="Empresa não encontrada.")
-        if org.get("status") != "APROVADA":
+        block = billing_block(org)
+        if org.get("status") != "APROVADA" and not block:
             detail = (
                 "Sua empresa está aguardando liberação do administrador da plataforma."
                 if org.get("status") == "PENDENTE"
                 else "O acesso da sua empresa está suspenso. Fale com o suporte."
             )
             raise HTTPException(status_code=403, detail=detail)
-        if org.get("subscription_status") not in _LIVE_SUBSCRIPTIONS:
+        if block and user["role"] != ROLE_ADMIN:
             raise HTTPException(
-                status_code=403, detail="Assinatura cancelada. Fale com o suporte para reativar."
+                status_code=403,
+                detail=f"{BLOCK_MESSAGES[block]} Fale com o administrador da loja.",
             )
-        if trial_expired(org):
-            raise HTTPException(status_code=403, detail=TRIAL_OVER_MESSAGE)
         org_name = org.get("name", "")
 
     return Principal(
@@ -219,7 +226,17 @@ async def get_current_user(ev_session: str | None = Cookie(default=None)) -> Pri
         role=user["role"],
         org_id=org_id,
         org_name=org_name,
+        billing_block=block,
     )
+
+
+def _billing_gate(principal: "Principal") -> None:
+    if principal.billing_block:
+        raise HTTPException(
+            status_code=403,
+            detail=BLOCK_MESSAGES[principal.billing_block],
+            headers={"X-Billing-Block": principal.billing_block},
+        )
 
 
 def authorize(principal: Principal, action: str) -> bool:
@@ -231,6 +248,7 @@ def require(action: str):
     """Route dependency: `Depends(require("products:write"))`."""
 
     async def dependency(principal: Principal = Depends(get_current_user)) -> Principal:
+        _billing_gate(principal)
         if not authorize(principal, action):
             raise HTTPException(
                 status_code=403, detail="Seu perfil não tem permissão para esta ação."
@@ -251,6 +269,16 @@ async def require_org(principal: Principal = Depends(get_current_user)) -> Princ
         raise HTTPException(
             status_code=403,
             detail="Esta área pertence a uma empresa cliente. Use o painel da plataforma.",
+        )
+    _billing_gate(principal)
+    return principal
+
+
+async def require_billing_admin(principal: Principal = Depends(get_current_user)) -> Principal:
+    """Minha assinatura: só o ADMIN da loja, e funciona mesmo com a cobrança pendente."""
+    if principal.role != ROLE_ADMIN or not principal.org_id:
+        raise HTTPException(
+            status_code=403, detail="Só o administrador da loja gerencia a assinatura."
         )
     return principal
 

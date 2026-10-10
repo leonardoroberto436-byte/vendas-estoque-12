@@ -31,6 +31,8 @@ import type {
   BackupSettings,
   DeleteResult,
   RestoreResult,
+  PlanLimit,
+  PlanLimits,
   PlanPrices,
   PlatformLog,
   PlatformRevenue,
@@ -115,6 +117,9 @@ export default function Platform() {
   const [editForm, setEditForm] = useState({ name: "", owner_name: "", owner_email: "" });
   const [credentials, setCredentials] = useState<OrgCredentials | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<string, string> | null>(null);
+  const [limitsDraft, setLimitsDraft] = useState<Record<string, PlanLimit> | null>(null);
+  const [extrasOrg, setExtrasOrg] = useState<PlatformOrgView | null>(null);
+  const [extras, setExtras] = useState({ extra_users: "0", extra_products: "0" });
   // remoção de contas
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [deletingOrg, setDeletingOrg] = useState<PlatformOrgView | null>(null);
@@ -145,6 +150,11 @@ export default function Platform() {
   const { data: prices } = useQuery({
     queryKey: ["platform-plan-prices"],
     queryFn: () => apiGet<PlanPrices>("/platform/plan-prices"),
+    refetchOnWindowFocus: false,
+  });
+  const { data: planLimits } = useQuery({
+    queryKey: ["platform-plan-limits"],
+    queryFn: () => apiGet<PlanLimits>("/platform/plan-limits"),
     refetchOnWindowFocus: false,
   });
   const { data: logData } = useQuery({
@@ -317,6 +327,29 @@ export default function Platform() {
     void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
     },
     onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar os preços")),
+  });
+
+  const saveLimits = useMutation({
+    mutationFn: (draft: Record<string, PlanLimit>) =>
+      apiPut<PlanLimits>("/platform/plan-limits", { limits: draft }),
+    onSuccess: () => {
+      setLimitsDraft(null);
+      toast.success("Limites dos planos atualizados");
+      void queryClient.invalidateQueries({ queryKey: ["platform-plan-limits"] });
+      void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar os limites")),
+  });
+
+  const saveExtras = useMutation({
+    mutationFn: ({ id, extra_users, extra_products }: { id: string; extra_users: number; extra_products: number }) =>
+      apiPut(`/platform/organizations/${id}/limits`, { extra_users, extra_products }),
+    onSuccess: () => {
+      setExtrasOrg(null);
+      toast.success("Exceção de limite salva");
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível salvar a exceção")),
   });
 
   const runBackup = useMutation({
@@ -548,6 +581,12 @@ export default function Platform() {
                 <p className="text-[11px] text-slate-500">empresas</p>
               </div>
             </div>
+            <p className="mt-3 text-xs text-slate-400" data-testid="platform-received-30d">
+              Recebido pelo Mercado Pago nos últimos 30 dias:{" "}
+              <strong className="font-mono text-emerald-400">
+                {money(revenue?.received_last_30d ?? 0)}
+              </strong>
+            </p>
 
             <div className="mt-6 overflow-x-auto">
               <Table data-testid="platform-revenue-table">
@@ -603,8 +642,110 @@ export default function Platform() {
               </Table>
             </div>
             <p className="mt-4 text-xs text-slate-500">
-              Avisos de vencimento vão automaticamente para o e-mail do responsável 7, 3 e 1 dia
-              antes e no dia do vencimento. Defina a data na coluna “Vencimento” abaixo.
+              Quem assina pelo Mercado Pago é cobrado no cartão todo mês e o sistema ativa,
+              marca atraso e suspende (após 5 dias) sozinho. Para quem paga por fora (Pix, link),
+              os avisos de vencimento vão ao e-mail do responsável 7, 3 e 1 dia antes e no dia —
+              defina a data na coluna “Vencimento” abaixo.
+            </p>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 border-white/10 bg-slate-900 shadow-none" data-testid="platform-limits-card">
+          <CardHeader className="flex flex-row items-center justify-between gap-4">
+            <CardTitle className="text-base font-bold tracking-tight text-white">
+              Limites dos planos
+            </CardTitle>
+            {limitsDraft ? (
+              <Button
+                size="sm"
+                data-testid="platform-save-limits-button"
+                disabled={saveLimits.isPending}
+                onClick={() => saveLimits.mutate(limitsDraft)}
+              >
+                <Save className="size-4" />
+                Salvar limites
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                data-testid="platform-edit-limits-button"
+                disabled={!planLimits}
+                onClick={() => planLimits && setLimitsDraft(structuredClone(planLimits.limits))}
+              >
+                <Pencil className="size-4" />
+                Editar limites
+              </Button>
+            )}
+          </CardHeader>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="text-slate-400">Plano</TableHead>
+                    <TableHead className="text-slate-400">Usuários</TableHead>
+                    <TableHead className="text-slate-400">Produtos</TableHead>
+                    <TableHead className="text-slate-400">Histórico (meses)</TableHead>
+                    <TableHead className="text-slate-400">Relatório completo</TableHead>
+                    <TableHead className="text-slate-400">Logo no cupom</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {PLANS.map((plan) => {
+                    const row = (limitsDraft ?? planLimits?.limits)?.[plan];
+                    if (!row) return null;
+                    const setNum = (field: "users" | "products" | "history_months", value: string) =>
+                      limitsDraft &&
+                      setLimitsDraft({
+                        ...limitsDraft,
+                        [plan]: { ...row, [field]: value.trim() === "" ? null : Math.max(0, Number(value) || 0) },
+                      });
+                    const setBool = (field: "full_report" | "branding", value: boolean) =>
+                      limitsDraft && setLimitsDraft({ ...limitsDraft, [plan]: { ...row, [field]: value } });
+                    const numCell = (field: "users" | "products" | "history_months") =>
+                      limitsDraft ? (
+                        <Input
+                          inputMode="numeric"
+                          placeholder="ilimitado"
+                          className="w-28 border-white/20 bg-slate-800 text-white"
+                          value={row[field] ?? ""}
+                          onChange={(e) => setNum(field, e.target.value)}
+                          data-testid={`platform-limit-${plan}-${field}`}
+                        />
+                      ) : (
+                        <span className="font-mono tabular-nums text-slate-200">{row[field] ?? "ilimitado"}</span>
+                      );
+                    const boolCell = (field: "full_report" | "branding") =>
+                      limitsDraft ? (
+                        <Checkbox
+                          checked={row[field]}
+                          onCheckedChange={(checked) => setBool(field, checked === true)}
+                          aria-label={field}
+                        />
+                      ) : (
+                        <span className={row[field] ? "text-emerald-400" : "text-slate-500"}>
+                          {row[field] ? "sim" : "não"}
+                        </span>
+                      );
+                    return (
+                      <TableRow key={plan} className="border-white/10 hover:bg-white/5">
+                        <TableCell className="font-semibold text-white">{PLAN_LABELS[plan]}</TableCell>
+                        <TableCell>{numCell("users")}</TableCell>
+                        <TableCell>{numCell("products")}</TableCell>
+                        <TableCell>{numCell("history_months")}</TableCell>
+                        <TableCell>{boolCell("full_report")}</TableCell>
+                        <TableCell>{boolCell("branding")}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+            <p className="px-6 py-4 text-xs text-slate-500">
+              Campo vazio = ilimitado. O período de teste usa a linha “Período de teste”. Para
+              liberar algo a mais só para uma loja, use o botão de exceção na lista de empresas.
             </p>
           </CardContent>
         </Card>
@@ -781,6 +922,19 @@ export default function Platform() {
                             ))}
                           </SelectContent>
                         </Select>
+                        {org.mp_status && (
+                          <p className="mt-1 text-[11px] text-slate-400" data-testid={`platform-org-mp-${org.id}`}>
+                            Mercado Pago: {org.mp_status === "authorized" ? "cartão ativo" : org.mp_status}
+                          </p>
+                        )}
+                        {org.payment_failed_at && (
+                          <p className="mt-1 text-[11px] font-semibold text-amber-400">
+                            pagamento recusado em {formatDateTime(org.payment_failed_at)}
+                          </p>
+                        )}
+                        {org.suspended_reason === "PAGAMENTO" && (
+                          <p className="mt-1 text-[11px] font-semibold text-red-400">suspensa por falta de pagamento</p>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Input
@@ -882,6 +1036,28 @@ export default function Platform() {
                               <RotateCcw className="size-4 text-teal-400" />
                             </Button>
                           )}
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Exceção de limite para ${org.name}`}
+                            title={
+                              org.extra_users || org.extra_products
+                                ? `Exceção: +${org.extra_users} usuário(s), +${org.extra_products} produto(s)`
+                                : "Liberar usuários/produtos a mais só para esta loja"
+                            }
+                            data-testid={`platform-org-extras-btn-${org.id}`}
+                            onClick={() => {
+                              setExtras({
+                                extra_users: String(org.extra_users ?? 0),
+                                extra_products: String(org.extra_products ?? 0),
+                              });
+                              setExtrasOrg(org);
+                            }}
+                          >
+                            <Plus
+                              className={`size-4 ${org.extra_users || org.extra_products ? "text-teal-400" : "text-slate-400"}`}
+                            />
+                          </Button>
                           <Button
                             size="icon-sm"
                             variant="ghost"
@@ -1302,6 +1478,58 @@ export default function Platform() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={extrasOrg !== null} onOpenChange={(open) => !open && setExtrasOrg(null)}>
+        <DialogContent className="sm:max-w-sm" data-testid="platform-extras-dialog">
+          <DialogHeader>
+            <DialogTitle>Exceção de limite</DialogTitle>
+            <DialogDescription>
+              Quantidade a mais, além do plano, só para <strong>{extrasOrg?.name}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="grid gap-1.5">
+              <Label htmlFor="extra-users">Usuários a mais</Label>
+              <Input
+                id="extra-users"
+                inputMode="numeric"
+                value={extras.extra_users}
+                onChange={(e) => setExtras({ ...extras, extra_users: e.target.value })}
+                data-testid="platform-extra-users-input"
+              />
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="extra-products">Produtos a mais</Label>
+              <Input
+                id="extra-products"
+                inputMode="numeric"
+                value={extras.extra_products}
+                onChange={(e) => setExtras({ ...extras, extra_products: e.target.value })}
+                data-testid="platform-extra-products-input"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtrasOrg(null)}>
+              Cancelar
+            </Button>
+            <Button
+              disabled={saveExtras.isPending}
+              data-testid="platform-extras-save-button"
+              onClick={() =>
+                extrasOrg &&
+                saveExtras.mutate({
+                  id: extrasOrg.id,
+                  extra_users: Math.max(0, Number(extras.extra_users) || 0),
+                  extra_products: Math.max(0, Number(extras.extra_products) || 0),
+                })
+              }
+            >
+              Salvar
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

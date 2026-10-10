@@ -53,6 +53,8 @@ async def root():
 from lib.auth import ensure_bootstrap_accounts  # noqa: E402
 from routers import (  # noqa: E402
     auth,
+    billing,
+    legal,
     dashboard,
     cron,
     platform,
@@ -67,6 +69,7 @@ from routers import (  # noqa: E402
 
 # Public: signup / login / forgot-password handle their own checks
 api_router.include_router(auth.router)
+api_router.include_router(legal.router)  # dados dos Termos/Privacidade (público)
 
 # Tenant-scoped: each router declares require_org (or require(...)) per route,
 # so the org always comes from the session, never from the request.
@@ -86,6 +89,9 @@ api_router.include_router(platform.router)
 
 # Platform cron webhook (shared-secret auth, no session)
 api_router.include_router(cron.router)
+
+# Minha assinatura (ADMIN da loja) + webhook do Mercado Pago (assinatura x-signature)
+api_router.include_router(billing.router)
 
 # Include the router in the main app
 app.include_router(api_router)

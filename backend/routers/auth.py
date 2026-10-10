@@ -14,7 +14,6 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 
 from lib.auth import (
     RESET_TOKEN_MINUTES,
-    TRIAL_OVER_MESSAGE,
     Principal,
     trial_expired,
     create_session,
@@ -24,6 +23,8 @@ from lib.auth import (
     hash_token,
     verify_password,
 )
+from lib.billing import BLOCK_MESSAGES, billing_block
+from routers.legal import TERMS_VERSION
 from lib.db import db
 from lib.email import send_password_reset, send_signup_pending
 from lib.subscriptions import days_until
@@ -85,6 +86,7 @@ def _org_summary(org: dict | None) -> OrgSummary | None:
         trial_ends_at=trial_ends,
         trial_days_left=days_left,
         trial_expired=trial_expired(org),
+        billing_block=billing_block(org),
         due_date=_aware(org.get("due_date")),
         days_to_due=days_until(org.get("due_date")),
     )
@@ -126,6 +128,16 @@ async def signup(payload: SignupRequest, request: Request):
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Já existe uma conta com este e-mail.")
     validate_new_password(payload.password)
+    if not payload.accept_terms:
+        raise HTTPException(
+            status_code=400,
+            detail="Para criar a conta, aceite os Termos de Uso e a Política de Privacidade.",
+        )
+    accepted = {
+        "terms_accepted_at": datetime.now(timezone.utc),
+        "terms_version": TERMS_VERSION,
+        "terms_accepted_ip": client_ip(request),
+    }
 
     org = Organization(
         name=payload.company_name.strip(),
@@ -135,7 +147,7 @@ async def signup(payload: SignupRequest, request: Request):
         plan="TESTE",
         subscription_status="TESTE",
     )
-    await db.organizations.insert_one(org.model_dump())
+    await db.organizations.insert_one({**org.model_dump(), **accepted})
 
     user = User(
         name=payload.name.strip(),
@@ -145,7 +157,7 @@ async def signup(payload: SignupRequest, request: Request):
         is_active=True,
     )
     await db.users.insert_one(
-        {**user.model_dump(), "password_hash": hash_password(payload.password)}
+        {**user.model_dump(), "password_hash": hash_password(payload.password), **accepted}
     )
     await _log_access(request, "CADASTRO", email, {**user.model_dump()})
 
@@ -194,19 +206,19 @@ async def login(payload: LoginRequest, request: Request, response: Response):
                 status_code=403,
                 detail="Sua empresa está aguardando liberação. Avisamos por e-mail quando aprovada.",
             )
-        if org["status"] == "SUSPENSA":
+        block = billing_block(org)
+        if org["status"] == "SUSPENSA" and not block:
             await _log_access(request, "LOGIN_BLOQUEADO", email, user)
             raise HTTPException(
                 status_code=403, detail="O acesso da sua empresa está suspenso. Fale com o suporte."
             )
-        if org["subscription_status"] == "CANCELADO":
+        if block and user["role"] != "ADMIN":
+            # só o administrador entra para regularizar a assinatura
             await _log_access(request, "LOGIN_BLOQUEADO", email, user)
             raise HTTPException(
-                status_code=403, detail="Assinatura cancelada. Fale com o suporte para reativar."
+                status_code=403,
+                detail=f"{BLOCK_MESSAGES[block]} Fale com o administrador da loja.",
             )
-        if trial_expired(org):
-            await _log_access(request, "LOGIN_BLOQUEADO", email, user)
-            raise HTTPException(status_code=403, detail=TRIAL_OVER_MESSAGE)
 
     now = datetime.now(timezone.utc)
     await db.users.update_one({"id": user["id"]}, {"$set": {"last_login_at": now}})

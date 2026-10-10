@@ -62,6 +62,7 @@ def throwaway_org(owner):
                 "company_name": f"Tscheck Audit {suffix}",
                 "email": email,
                 "password": SIGNUP_PASSWORD,
+                "accept_terms": True,
             },
         )
     assert resp.status_code == 201, resp.text
@@ -157,6 +158,7 @@ def test_logs_are_owner_only():
                 "name": "Tscheck Audit Operador",
                 "email": op_email,
                 "password": SIGNUP_PASSWORD,
+                "accept_terms": True,
                 "role": "OPERADOR",
                 "is_active": True,
             },

@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 
 from lib.auth import Principal, require, require_org, scoped
 from lib.db import db
+from lib.plans import plan_allows
 from models.branding import LOGO_MAX_CHARS, AlertSettings, OrgBranding, OrgBrandingUpdate
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
@@ -38,7 +39,11 @@ def _branding(org: dict | None) -> OrgBranding:
 @router.get("/branding", response_model=OrgBranding)
 async def get_branding(principal: Principal = Depends(require_org)):
     org = await db.organizations.find_one({"id": principal.org_id})
-    return _branding(org)
+    branding = _branding(org)
+    if not await plan_allows(principal.org_id, "branding"):
+        # logo é do Profissional para cima — fica guardado, só não aparece
+        branding.logo = None
+    return branding
 
 
 @router.put("/branding", response_model=OrgBranding)
@@ -49,7 +54,17 @@ async def update_branding(
         raise HTTPException(status_code=403, detail="Usuário sem empresa vinculada.")
 
     logo = payload.logo
-    if logo:
+    if not await plan_allows(principal.org_id, "branding"):
+        if logo:
+            raise HTTPException(
+                status_code=403,
+                detail="Logo no cupom e no relatório faz parte do plano Profissional. "
+                "Para liberar, mude de plano em Minha assinatura.",
+            )
+        # o plano não mostra logo, mas um logo enviado antes continua guardado
+        current = await db.organizations.find_one({"id": principal.org_id}, {"branding": 1})
+        logo = ((current or {}).get("branding") or {}).get("logo")
+    elif logo:
         if not logo.startswith(_ALLOWED_LOGO_PREFIXES):
             raise HTTPException(status_code=400, detail="O logo deve ser uma imagem PNG ou JPG.")
         if len(logo) > LOGO_MAX_CHARS:
@@ -70,7 +85,10 @@ async def update_branding(
         },
     )
     org = await db.organizations.find_one({"id": principal.org_id})
-    return _branding(org)
+    result = _branding(org)
+    if not await plan_allows(principal.org_id, "branding"):
+        result.logo = None
+    return result
 
 
 # ------------------------------------------------------------ alertas de estoque

@@ -270,3 +270,20 @@ async def send_due_reminder(
         else f"Sua assinatura vence em {days} dia{'s' if days > 1 else ''} \u2014 {EMAIL_FROM_NAME}"
     )
     return await send_email(to=to, subject=subject, html=_wrap(body))
+
+
+async def send_billing_notice(*, to: str, name: str, subject: str, paragraphs: list[str]) -> str | None:
+    """Avisos de assinatura (teste acabando, pagamento recusado, suspensão).
+
+    Os textos vêm sempre de lib/billing.py — nunca do usuário — e são escapados aqui.
+    """
+    base = app_url()
+    cta = ""
+    if base:
+        cta = (
+            f'<p style="margin:28px 0"><a href="{base}/assinatura" '
+            f'style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 22px;'
+            f'border-radius:8px;font-weight:bold;display:inline-block">Abrir minha assinatura</a></p>'
+        )
+    body = f"<p>Olá {escape(name)},</p>" + "".join(f"<p>{escape(p)}</p>" for p in paragraphs) + cta
+    return await send_email(to=to, subject=f"{subject} — {EMAIL_FROM_NAME}", html=_wrap(body))

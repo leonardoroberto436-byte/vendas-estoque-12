@@ -151,7 +151,7 @@ export default function MonthlyReportPage() {
             },
             {
               label: "Lucro líquido",
-              value: report ? money(report.net_profit ?? report.profit) : "—",
+              value: report ? (report.basic ? "No Profissional" : money(report.net_profit ?? report.profit)) : "—",
               testId: "report-kpi-profit",
             },
             {
@@ -181,6 +181,17 @@ export default function MonthlyReportPage() {
           ))}
         </div>
 
+        {report?.basic && (
+          <p
+            className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 text-sm text-teal-900 print:hidden"
+            data-testid="report-basic-notice"
+          >
+            Seu plano mostra o relatório básico (vendas e faturamento). Lucro, margem e produtos mais
+            vendidos fazem parte do plano Profissional —{" "}
+            <a href="/assinatura" className="font-semibold underline">ver planos</a>.
+          </p>
+        )}
+
         <Card className="border-slate-200/90 shadow-xs">
           <CardHeader>
             <CardTitle className="text-base font-bold tracking-tight">Resumo do mês</CardTitle>
@@ -197,9 +208,13 @@ export default function MonthlyReportPage() {
                   testId: "report-refunds",
                 },
                 { label: "Itens vendidos", value: report ? String(report.items_sold) : "—" },
-                { label: "Custo das vendas", value: report ? money(report.cost) : "—" },
+                { label: "Custo das vendas", value: report ? (report.basic ? "—" : money(report.cost)) : "—" },
                 { label: "Descontos", value: report ? money(report.discount_total) : "—" },
-                { label: "Margem líquida", value: report ? `${report.margin_percent}%` : "—", testId: "report-margin" },
+                {
+                  label: "Margem líquida",
+                  value: report ? (report.basic ? "—" : `${report.margin_percent}%`) : "—",
+                  testId: "report-margin",
+                },
                 {
                   label: "Melhor dia",
                   value: report?.best_day ? `Dia ${report.best_day}` : "—",

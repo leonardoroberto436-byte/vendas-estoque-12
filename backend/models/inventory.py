@@ -241,6 +241,8 @@ class MonthlyReport(BaseModel):
     refunds_count: int = 0
     net_revenue: float = 0.0
     net_profit: float = 0.0
+    # plano com relatório básico: custo, lucro, margem e produtos ficam de fora
+    basic: bool = False
     margin_percent: float
     average_ticket: float
     best_day: Optional[int] = None

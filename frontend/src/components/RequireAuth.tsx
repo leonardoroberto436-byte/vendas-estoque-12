@@ -6,6 +6,8 @@ interface Props {
   children: React.ReactNode;
   adminOnly?: boolean;
   platformOnly?: boolean;
+  /** "Minha assinatura": a única página liberada quando a cobrança está pendente */
+  billingPage?: boolean;
 }
 
 /** Route guard. The server enforces access; this only keeps the UI honest. */
@@ -13,6 +15,7 @@ export default function RequireAuth({
   children,
   adminOnly = false,
   platformOnly = false,
+  billingPage = false,
 }: Props) {
   const { user, isLoading, unauthenticated, isAdmin, isPlatformOwner } = useCurrentUser();
   const location = useLocation();
@@ -60,6 +63,11 @@ export default function RequireAuth({
         </div>
       </div>
     );
+  }
+
+  // Teste encerrado, suspensa por pagamento ou cancelada: só a assinatura funciona.
+  if (user.organization?.billing_block && !billingPage && !isPlatformOwner) {
+    return <Navigate to="/assinatura" replace />;
   }
 
   if (adminOnly && !isAdmin) {

@@ -6,12 +6,13 @@ from io import BytesIO
 from urllib.parse import quote
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from lib.auth import Principal, require_org, scoped
 
 from lib.db import db
+from lib.plans import history_months, plan_allows
 from models.inventory import (
     MonthlyReport,
     PaymentBreakdown,
@@ -39,6 +40,11 @@ MONTH_NAMES = [
 ]
 
 
+def _months_back(now_year: int, now_month: int, year: int, month: int) -> int:
+    """How many months `year/month` is before the current month (0 = this month)."""
+    return (now_year - year) * 12 + (now_month - month)
+
+
 def _local(value) -> datetime:
     if isinstance(value, datetime) and value.tzinfo is None:
         value = value.replace(tzinfo=timezone.utc)
@@ -55,6 +61,9 @@ async def available_months(principal: Principal = Depends(require_org)):
         keys.add((local.year, local.month))
     now = datetime.now(timezone.utc).astimezone(BR_TZ)
     keys.add((now.year, now.month))
+    allowed = await history_months(principal.org_id)
+    if allowed is not None:
+        keys = {k for k in keys if _months_back(now.year, now.month, *k) < allowed}
     return [
         ReportMonth(year=year, month=month, label=f"{MONTH_NAMES[month - 1].capitalize()} {year}")
         for year, month in sorted(keys, reverse=True)
@@ -70,6 +79,13 @@ async def monthly_report(
     now = datetime.now(timezone.utc).astimezone(BR_TZ)
     year = year or now.year
     month = month or now.month
+    allowed = await history_months(principal.org_id)
+    if allowed is not None and _months_back(now.year, now.month, year, month) >= allowed:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Seu plano mostra os relatórios dos últimos {allowed} meses. "
+            "Para ver meses mais antigos, mude de plano em Minha assinatura.",
+        )
 
     days_in_month = monthrange(year, month)[1]
     start = datetime(year, month, 1, tzinfo=BR_TZ).astimezone(timezone.utc)
@@ -122,6 +138,15 @@ async def monthly_report(
     best_day = max(daily.items(), key=lambda kv: kv[1]["revenue"]) if sales else None
     top = sorted(tally.items(), key=lambda kv: kv[1]["revenue"], reverse=True)[:10]
 
+    basic = not await plan_allows(principal.org_id, "full_report")
+    if basic:
+        # relatório básico: vendas e faturamento; custo, lucro e ranking ficam
+        # para o plano Profissional (os dados continuam guardados)
+        cost = profit = net_profit = 0.0
+        top = []
+        for bucket in daily.values():
+            bucket["profit"] = 0.0
+
     return MonthlyReport(
         year=year,
         month=month,
@@ -137,7 +162,8 @@ async def monthly_report(
         refunds_count=len(returns),
         net_revenue=net_revenue,
         net_profit=net_profit,
-        margin_percent=round((net_profit / net_revenue * 100) if net_revenue > 0 else 0, 1),
+        basic=basic,
+        margin_percent=0.0 if basic else round((net_profit / net_revenue * 100) if net_revenue > 0 else 0, 1),
         average_ticket=round(revenue / len(sales), 2) if sales else 0.0,
         best_day=best_day[0] if best_day and best_day[1]["revenue"] > 0 else None,
         best_day_revenue=round(best_day[1]["revenue"], 2) if best_day else 0.0,

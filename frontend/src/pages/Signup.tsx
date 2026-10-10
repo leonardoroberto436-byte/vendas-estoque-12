@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function Signup() {
   const [name, setName] = useState("");
@@ -16,6 +17,7 @@ export default function Signup() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
+  const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState("");
   const [done, setDone] = useState<SignupResponse | null>(null);
 
@@ -26,6 +28,7 @@ export default function Signup() {
         company_name: company.trim(),
         email: email.trim(),
         password,
+        accept_terms: accepted,
       }),
     onSuccess: (data) => setDone(data),
     onError: (err) => setError(errorMessage(err, "Não foi possível concluir o cadastro")),
@@ -39,6 +42,7 @@ export default function Signup() {
     if (!email.includes("@")) return setError("Informe um e-mail válido.");
     if (password.length < 10) return setError("A senha precisa ter pelo menos 10 caracteres, com letras e números.");
     if (password !== confirm) return setError("A confirmação não confere com a senha.");
+    if (!accepted) return setError("Para criar a conta, aceite os Termos de Uso e a Política de Privacidade.");
     signup.mutate();
   };
 
@@ -80,7 +84,7 @@ export default function Signup() {
               Estoque &amp; Vendas Pro
             </p>
             <p className="text-xs font-medium text-slate-500">
-              Crie a conta da sua empresa — 14 dias de teste
+              Crie a conta da sua empresa — 2 dias de teste grátis
             </p>
           </div>
         </div>
@@ -155,6 +159,27 @@ export default function Signup() {
                   />
                 </div>
               </div>
+
+              <label className="flex items-start gap-2.5 text-sm text-slate-600" data-testid="signup-terms">
+                <Checkbox
+                  checked={accepted}
+                  onCheckedChange={(checked) => setAccepted(checked === true)}
+                  className="mt-0.5"
+                  aria-label="Aceito os Termos de Uso e a Política de Privacidade"
+                  data-testid="signup-terms-checkbox"
+                />
+                <span>
+                  Li e aceito os{" "}
+                  <Link to="/termos" target="_blank" className="font-semibold text-teal-700 hover:underline">
+                    Termos de Uso
+                  </Link>{" "}
+                  e a{" "}
+                  <Link to="/privacidade" target="_blank" className="font-semibold text-teal-700 hover:underline">
+                    Política de Privacidade
+                  </Link>
+                  .
+                </span>
+              </label>
 
               {error && (
                 <p

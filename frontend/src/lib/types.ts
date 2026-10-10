@@ -17,6 +17,8 @@ export interface OrgSummary {
   trial_days_left: number | null;
   /** teste grátis encerrado: a empresa fica bloqueada até ganhar um plano */
   trial_expired?: boolean;
+  /** TESTE_ENCERRADO | PAGAMENTO | CANCELADO — só "Minha assinatura" funciona */
+  billing_block?: string;
   due_date: string | null;
   days_to_due: number | null;
 }
@@ -41,6 +43,7 @@ export interface PlatformRevenue {
   paying_orgs: number;
   trial_orgs: number;
   by_plan: PlanRevenue[];
+  received_last_30d: number;
 }
 
 export interface PlatformLog {
@@ -109,6 +112,11 @@ export interface PlatformOrgView extends OrgSummary {
   product_count: number;
   sales_count: number;
   last_activity_at: string | null;
+  extra_users: number;
+  extra_products: number;
+  mp_status: string;
+  payment_failed_at: string | null;
+  suspended_reason: string;
 }
 
 export interface PlatformUserView {
@@ -470,6 +478,8 @@ export interface MonthlyReport {
   refunds_count: number;
   net_revenue: number;
   net_profit: number;
+  /** plano com relatório básico: custo, lucro, margem e ranking ficam de fora */
+  basic: boolean;
   margin_percent: number;
   average_ticket: number;
   best_day: number | null;
@@ -477,4 +487,62 @@ export interface MonthlyReport {
   daily: ReportDayPoint[];
   payments: PaymentBreakdown[];
   top_products: TopProduct[];
+}
+
+// ------------------------------------------------------------ legal
+export interface LegalInfo {
+  product_name: string;
+  company_name: string;
+  document: string;
+  contact_email: string;
+  city: string;
+  version: string;
+}
+
+// ------------------------------------------------------------ assinatura
+export type PaidPlan = "INICIAL" | "PROFISSIONAL" | "AVANCADO";
+
+export interface PlanLimit {
+  users: number | null;
+  products: number | null;
+  history_months: number | null;
+  full_report: boolean;
+  branding: boolean;
+}
+
+export interface UsageItem {
+  used: number;
+  limit: number | null;
+}
+
+export interface BillingInfo {
+  plan: Plan;
+  plan_label: string;
+  subscription_status: SubscriptionStatus;
+  status: OrgStatus;
+  trial_ends_at: string | null;
+  trial_expired: boolean;
+  due_date: string | null;
+  price: number;
+  coupon: string;
+  mp_status: string;
+  payment_failed_at: string | null;
+  suspend_on: string | null;
+  cancel_at: string | null;
+  plan_next: string;
+  billing_block: string;
+  billing_enabled: boolean;
+  founder_slots_left: number;
+  prices: Record<PaidPlan, number>;
+  limits: Record<PaidPlan, PlanLimit>;
+  usage: { users: UsageItem; products: UsageItem };
+}
+
+export interface SubscribeResponse {
+  checkout_url: string;
+  message: string;
+}
+
+export interface PlanLimits {
+  limits: Record<string, PlanLimit>;
 }

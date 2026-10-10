@@ -14,6 +14,8 @@ import Admin from "@/pages/Admin";
 import Platform from "@/pages/Platform";
 import Profile from "@/pages/Profile";
 import Company from "@/pages/Company";
+import Subscription from "@/pages/Subscription";
+import { PrivacyPage, TermsPage } from "@/pages/Legal";
 import RequireAuth from "@/components/RequireAuth";
 
 /** Tenant-scoped page: any signed-in member of a company. */
@@ -30,6 +32,8 @@ export default function App() {
       <Route path="/cadastro" element={<Signup />} />
       <Route path="/esqueci-senha" element={<ForgotPassword />} />
       <Route path="/redefinir-senha" element={<ResetPassword />} />
+      <Route path="/termos" element={<TermsPage />} />
+      <Route path="/privacidade" element={<PrivacyPage />} />
 
       {/* company workspace */}
       <Route path="/" element={<Shop><Home /></Shop>} />
@@ -48,6 +52,14 @@ export default function App() {
         element={
           <RequireAuth adminOnly>
             <Company />
+          </RequireAuth>
+        }
+      />
+      <Route
+        path="/assinatura"
+        element={
+          <RequireAuth adminOnly billingPage>
+            <Subscription />
           </RequireAuth>
         }
       />

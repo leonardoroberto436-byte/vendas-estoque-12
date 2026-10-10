@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from lib.auth import ROLE_ADMIN, Principal, hash_password, require, trial_expired
+from lib.billing import billing_block, run_billing_daily
 from lib.backups import (
     KEEP_BACKUPS,
     backup_path,
@@ -34,6 +35,7 @@ from lib.subscriptions import (
     run_due_reminders,
     set_plan_prices,
 )
+from lib.plans import get_plan_limits, set_plan_limits
 from lib.restore import read_archive, select_org, write as restore_write
 from models.org import (
     DEFAULT_PLAN_PRICES,
@@ -41,6 +43,8 @@ from models.org import (
     BackupSettings,
     DeleteResult,
     OrgBulkDeleteRequest,
+    OrgLimitOverride,
+    PlanLimits,
     OrgDeleteRequest,
     RestoreOrgRequest,
     RestoreResult,
@@ -98,6 +102,7 @@ async def _to_view(org: dict) -> PlatformOrgView:
         trial_ends_at=trial_ends,
         trial_days_left=days_left,
         trial_expired=trial_expired(org),
+        billing_block=billing_block(org),
         due_date=_aware(org.get("due_date")),
         days_to_due=days_until(org.get("due_date")),
         owner_name=org.get("owner_name", ""),
@@ -109,6 +114,11 @@ async def _to_view(org: dict) -> PlatformOrgView:
         product_count=await db.products.count_documents(org_filter),
         sales_count=await db.sales.count_documents(org_filter),
         last_activity_at=_aware(last_sale["created_at"]) if last_sale else None,
+        extra_users=int((org.get("limit_overrides") or {}).get("extra_users", 0)),
+        extra_products=int((org.get("limit_overrides") or {}).get("extra_products", 0)),
+        mp_status=(org.get("billing") or {}).get("mp_status", ""),
+        payment_failed_at=_aware((org.get("billing") or {}).get("payment_failed_at")),
+        suspended_reason=org.get("suspended_reason", "") or "",
     )
 
 
@@ -338,6 +348,8 @@ async def set_org_status(
     changes: dict = {"status": payload.status}
     newly_approved = payload.status == "APROVADA" and org["status"] != "APROVADA"
 
+    if payload.status == "APROVADA":
+        changes["suspended_reason"] = ""
     if newly_approved:
         changes["approved_at"] = now
         changes["suspended_at"] = None
@@ -347,6 +359,7 @@ async def set_org_status(
             changes["plan"] = "TESTE"
     if payload.status == "SUSPENSA":
         changes["suspended_at"] = now
+        changes["suspended_reason"] = "MANUAL"
         # revoke live sessions of that company immediately
         members = await db.users.find({"org_id": org_id}, {"id": 1}).to_list(5000)
         if members:
@@ -388,6 +401,8 @@ async def set_org_plan(
         "plan": payload.plan,
         "subscription_status": payload.subscription_status,
     }
+    if payload.subscription_status == "ATIVO":
+        changes["billing.payment_failed_at"] = None  # o dono confirmou o pagamento
     if payload.due_date is None:
         changes["due_date"] = None
     else:
@@ -447,6 +462,50 @@ async def write_plan_prices(
     return PlanPrices(prices=prices)
 
 
+@router.get("/plan-limits", response_model=PlanLimits)
+async def read_plan_limits():
+    return PlanLimits(limits=await get_plan_limits())
+
+
+@router.put("/plan-limits", response_model=PlanLimits)
+async def write_plan_limits(payload: PlanLimits, principal: Principal = Depends(_owner)):
+    unknown = set(payload.limits) - set(DEFAULT_PLAN_PRICES)
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"Plano desconhecido: {', '.join(unknown)}")
+    saved = await set_plan_limits({k: v.model_dump() for k, v in payload.limits.items()})
+    await log_platform_action(
+        actor_email=principal.email,
+        action="LIMITES_ALTERADOS",
+        target="planos",
+        details=" · ".join(
+            f"{k}: {v['users'] if v['users'] is not None else '∞'} usu./"
+            f"{v['products'] if v['products'] is not None else '∞'} prod."
+            for k, v in saved.items()
+        ),
+    )
+    return PlanLimits(limits=saved)
+
+
+@router.put("/organizations/{org_id}/limits", response_model=OrgLimitOverride)
+async def set_org_limits(
+    org_id: str, payload: OrgLimitOverride, principal: Principal = Depends(_owner)
+):
+    """Exceção para uma empresa: usuários/produtos a mais além do plano."""
+    org = await db.organizations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    await db.organizations.update_one(
+        {"id": org_id}, {"$set": {"limit_overrides": payload.model_dump()}}
+    )
+    await log_platform_action(
+        actor_email=principal.email,
+        action="EXCECAO_DE_LIMITE",
+        target=org.get("name", ""),
+        details=f"+{payload.extra_users} usuário(s) · +{payload.extra_products} produto(s)",
+    )
+    return payload
+
+
 @router.get("/revenue", response_model=PlatformRevenue)
 async def platform_revenue():
     """Recurring revenue: what is actually billable today versus what is late.
@@ -460,13 +519,17 @@ async def platform_revenue():
     rows: list[PlanRevenue] = []
     mrr = overdue = 0.0
     paying = trials = 0
+    def amount(org: dict, price: float) -> float:
+        # quem assinou pelo Mercado Pago paga o valor combinado (com cupom, se houver)
+        return float((org.get("billing") or {}).get("amount") or price)
+
     for plan, price in prices.items():
         in_plan = [o for o in orgs if o.get("plan") == plan]
         billable = [o for o in in_plan if o.get("subscription_status") in PAYING_STATUSES]
         active = [o for o in billable if o.get("subscription_status") == "ATIVO"]
         late = [o for o in billable if o.get("subscription_status") == "INADIMPLENTE"]
-        mrr += price * len(active)
-        overdue += price * len(late)
+        mrr += sum(amount(o, price) for o in active)
+        overdue += sum(amount(o, price) for o in late)
         paying += len(billable)
         if plan == "TESTE":
             trials += len(in_plan)
@@ -477,9 +540,14 @@ async def platform_revenue():
                 price=price,
                 paying_orgs=len(billable),
                 total_orgs=len(in_plan),
-                monthly_revenue=round(price * len(billable), 2),
+                monthly_revenue=round(sum(amount(o, price) for o in billable), 2),
             )
         )
+
+    since = datetime.now(timezone.utc) - timedelta(days=30)
+    received = await db.billing_payments.find(
+        {"status": "approved", "created_at": {"$gte": since}}, {"amount": 1}
+    ).to_list(100000)
 
     return PlatformRevenue(
         mrr=round(mrr, 2),
@@ -488,13 +556,16 @@ async def platform_revenue():
         paying_orgs=paying,
         trial_orgs=trials,
         by_plan=rows,
+        received_last_30d=round(sum(float(p.get("amount", 0)) for p in received), 2),
     )
 
 
 @router.post("/run-due-reminders")
 async def trigger_due_reminders():
     """Manual trigger for the daily reminder job — same code path as the cron."""
-    return await run_due_reminders()
+    result = await run_due_reminders()
+    result["billing"] = await run_billing_daily()
+    return result
 
 
 # ------------------------------------------------- auditoria e backups

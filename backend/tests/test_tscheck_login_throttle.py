@@ -40,6 +40,7 @@ def fresh_account():
                 "company_name": "Tscheck Throttle Co",
                 "email": email,
                 "password": PASSWORD,
+                "accept_terms": True,
             },
         )
     assert resp.status_code == 201, resp.text

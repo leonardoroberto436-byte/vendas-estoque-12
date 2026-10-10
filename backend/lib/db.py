@@ -48,6 +48,14 @@ INDEXES: dict[str, list[IndexModel]] = {
         IndexModel([("id", ASCENDING)], name="id", unique=True),
         IndexModel([("status", ASCENDING), ("created_at", DESCENDING)], name="status_created"),
         IndexModel([("owner_email", ASCENDING)], name="owner_email"),
+        IndexModel([("billing.mp_preapproval_id", ASCENDING)], name="mp_preapproval"),
+    ],
+    "billing_payments": [
+        IndexModel([("mp_id", ASCENDING)], name="mp_id", unique=True),
+        IndexModel([("org_id", ASCENDING), ("created_at", DESCENDING)], name="org_created"),
+    ],
+    "billing_events": [
+        IndexModel([("created_at", DESCENDING)], name="created_desc"),
     ],
     "users": [
         IndexModel([("id", ASCENDING)], name="id", unique=True),

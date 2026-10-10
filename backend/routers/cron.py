@@ -11,6 +11,7 @@ import os
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
 from lib.backups import run_backup
+from lib.billing import run_billing_daily
 from lib.subscriptions import run_due_reminders
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ async def subscription_reminders(
         if len(_seen_runs) > 500:
             _seen_runs.clear()
     background.add_task(run_due_reminders)
+    background.add_task(run_billing_daily)  # tolerância, suspensão e fim do teste
     return {"status": "accepted", "run_id": run_id}
 
 

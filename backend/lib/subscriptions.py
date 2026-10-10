@@ -71,6 +71,8 @@ async def run_due_reminders() -> dict:
             continue
         if org.get("subscription_status") not in PAYING_STATUSES:
             continue
+        if (org.get("billing") or {}).get("mp_status") == "authorized":
+            continue  # cartão cobrado automaticamente: aviso de vencimento não se aplica
         marker = f"{due.astimezone(APP_TZ).date().isoformat()}:{left}"
         if marker in (org.get("reminders_sent") or []):
             skipped += 1
@@ -118,6 +120,8 @@ async def mark_overdue(orgs: list[dict]) -> int:
     for org in orgs:
         if org.get("subscription_status") != "ATIVO":
             continue
+        if (org.get("billing") or {}).get("mp_status") == "authorized":
+            continue  # cobrança automática: quem marca atraso é o Mercado Pago
         left = days_until(org.get("due_date"))
         if left is None or left >= 0:
             continue

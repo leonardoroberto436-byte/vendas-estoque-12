@@ -151,6 +151,11 @@ export default function Login() {
               Cadastrar minha empresa
             </Link>
           </p>
+          <p className="mt-3 text-center text-xs text-slate-400" data-testid="login-legal-links">
+            <Link to="/termos" className="hover:underline">Termos de Uso</Link>
+            {" · "}
+            <Link to="/privacidade" className="hover:underline">Política de Privacidade</Link>
+          </p>
         </div>
       </div>
     </div>

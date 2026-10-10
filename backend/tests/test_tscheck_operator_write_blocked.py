@@ -40,6 +40,7 @@ def _signup(suffix: str) -> dict:
                 "company_name": f"TscheckOpWrite {suffix}",
                 "email": email,
                 "password": PASSWORD,
+                "accept_terms": True,
             },
         )
     assert resp.status_code == 201, resp.text
@@ -94,6 +95,7 @@ def operator_and_admin():
                 "name": "Tscheck Operador",
                 "email": op_email,
                 "password": PASSWORD,
+                "accept_terms": True,
                 "role": "OPERADOR",
                 "is_active": True,
             },

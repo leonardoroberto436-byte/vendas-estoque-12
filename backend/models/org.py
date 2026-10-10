@@ -14,7 +14,8 @@ Plan = Literal["TESTE", "INICIAL", "PROFISSIONAL", "AVANCADO"]
 SubscriptionStatus = Literal["TESTE", "ATIVO", "INADIMPLENTE", "CANCELADO"]
 OrgStatus = Literal["PENDENTE", "APROVADA", "SUSPENSA"]
 
-TRIAL_DAYS = 14
+# Teste grátis: curto de propósito — o cliente experimenta e já escolhe o plano.
+TRIAL_DAYS = 2
 
 PLAN_LABELS: dict[str, str] = {
     "TESTE": "Período de teste",
@@ -27,10 +28,31 @@ PLAN_LABELS: dict[str, str] = {
 # this dict is only the fallback used before the first edit.
 DEFAULT_PLAN_PRICES: dict[str, float] = {
     "TESTE": 0.0,
-    "INICIAL": 49.90,
-    "PROFISSIONAL": 79.90,
-    "AVANCADO": 129.90,
+    "INICIAL": 79.00,
+    "PROFISSIONAL": 129.00,
+    "AVANCADO": 199.00,
 }
+
+# Plans a company can subscribe to (TESTE is only the free trial).
+PAID_PLANS = ("INICIAL", "PROFISSIONAL", "AVANCADO")
+
+# What each plan allows. None = unlimited. Editable by the platform owner at
+# runtime (platform_settings "limits"); this dict is the fallback.
+# During the free trial the company gets the Profissional package.
+DEFAULT_PLAN_LIMITS: dict[str, dict] = {
+    "TESTE": {"users": 5, "products": 3000, "history_months": 12, "full_report": True, "branding": True},
+    "INICIAL": {"users": 2, "products": 500, "history_months": 3, "full_report": False, "branding": False},
+    "PROFISSIONAL": {"users": 5, "products": 3000, "history_months": 12, "full_report": True, "branding": True},
+    "AVANCADO": {"users": None, "products": None, "history_months": None, "full_report": True, "branding": True},
+}
+
+# Founder coupon: 50% off for life, first 10 companies only.
+FOUNDER_COUPON = "FUNDADOR"
+FOUNDER_DISCOUNT = 0.5
+FOUNDER_SLOTS = 10
+
+# Days a failed payment is tolerated before the company is suspended.
+PAYMENT_GRACE_DAYS = 5
 
 # Days before the due date that trigger a reminder e-mail (0 = on the day).
 REMINDER_DAYS = (7, 3, 1, 0)
@@ -68,6 +90,8 @@ class SignupRequest(BaseModel):
     company_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # aceite dos Termos de Uso e da Política de Privacidade (obrigatório)
+    accept_terms: bool = False
 
 
 class SignupResponse(BaseModel):
@@ -90,6 +114,8 @@ class OrgSummary(BaseModel):
     trial_days_left: Optional[int] = None
     # teste grátis vencido: a empresa fica bloqueada até o dono escolher um plano
     trial_expired: bool = False
+    # TESTE_ENCERRADO | PAGAMENTO | CANCELADO — só "Minha assinatura" funciona
+    billing_block: str = ""
     due_date: Optional[datetime] = None
     days_to_due: Optional[int] = None
 
@@ -106,6 +132,12 @@ class PlatformOrgView(OrgSummary):
     product_count: int
     sales_count: int
     last_activity_at: Optional[datetime] = None
+    extra_users: int = 0
+    extra_products: int = 0
+    # Mercado Pago: estado da assinatura no MP e se o último pagamento falhou
+    mp_status: str = ""
+    payment_failed_at: Optional[datetime] = None
+    suspended_reason: str = ""
 
 
 class OrgStatusUpdate(BaseModel):
@@ -173,6 +205,8 @@ class PlatformRevenue(BaseModel):
     paying_orgs: int
     trial_orgs: int
     by_plan: List[PlanRevenue]
+    # dinheiro que de fato entrou pelo Mercado Pago nos últimos 30 dias
+    received_last_30d: float = 0.0
 
 
 class PlatformUserView(BaseModel):
@@ -268,3 +302,71 @@ class DeleteResult(BaseModel):
     deleted_records: int
     safety_backup: str
     message: str
+
+
+
+# ------------------------------------------------------------ limites por plano
+class PlanLimit(BaseModel):
+    users: Optional[int] = Field(default=None, ge=0)
+    products: Optional[int] = Field(default=None, ge=0)
+    history_months: Optional[int] = Field(default=None, ge=1)
+    full_report: bool = True
+    branding: bool = True
+
+
+class PlanLimits(BaseModel):
+    limits: dict[str, PlanLimit]
+
+
+class OrgLimitOverride(BaseModel):
+    """Exceção por empresa: unidades a mais além do plano."""
+
+    extra_users: int = Field(default=0, ge=0, le=1000)
+    extra_products: int = Field(default=0, ge=0, le=1_000_000)
+
+
+class UsageItem(BaseModel):
+    used: int
+    limit: Optional[int] = None
+
+
+# ------------------------------------------------------------ assinatura
+class BillingInfo(BaseModel):
+    """O que a loja vê em "Minha assinatura"."""
+
+    plan: Plan
+    plan_label: str
+    subscription_status: SubscriptionStatus
+    status: OrgStatus
+    trial_ends_at: Optional[datetime] = None
+    trial_expired: bool = False
+    due_date: Optional[datetime] = None
+    price: float = 0.0
+    coupon: str = ""
+    mp_status: str = ""
+    payment_failed_at: Optional[datetime] = None
+    suspend_on: Optional[datetime] = None
+    cancel_at: Optional[datetime] = None
+    plan_next: str = ""
+    billing_block: str = ""
+    billing_enabled: bool = False
+    founder_slots_left: int = 0
+    prices: dict[str, float]
+    limits: dict[str, PlanLimit]
+    usage: dict[str, UsageItem]
+
+
+class SubscribeRequest(BaseModel):
+    plan: Literal["INICIAL", "PROFISSIONAL", "AVANCADO"]
+    coupon: str = Field(default="", max_length=30)
+    # e-mail da conta Mercado Pago de quem vai pagar (padrão: o e-mail do admin)
+    payer_email: Optional[EmailStr] = None
+
+
+class SubscribeResponse(BaseModel):
+    checkout_url: str
+    message: str
+
+
+class ChangePlanRequest(BaseModel):
+    plan: Literal["INICIAL", "PROFISSIONAL", "AVANCADO"]

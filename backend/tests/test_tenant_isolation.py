@@ -50,6 +50,7 @@ def _signup(suffix: str) -> dict:
                 "company_name": f"Empresa {suffix}",
                 "email": email,
                 "password": PASSWORD,
+                "accept_terms": True,
             },
         )
     assert resp.status_code == 201, resp.text
@@ -153,6 +154,7 @@ def test_signup_rejects_duplicate_email(tenants):
                 "company_name": "Empresa Clone",
                 "email": tenants["a"]["email"],
                 "password": PASSWORD,
+                "accept_terms": True,
             },
         )
     assert resp.status_code == 409
@@ -385,6 +387,7 @@ def test_operator_cannot_manage_users(tenants):
             "name": "Operador A",
             "email": email,
             "password": PASSWORD,
+            "accept_terms": True,
             "role": "OPERADOR",
             "is_active": True,
         },
@@ -409,6 +412,7 @@ def test_operator_cannot_self_promote_to_admin(tenants):
             "name": "Operador Dois",
             "email": email,
             "password": PASSWORD,
+            "accept_terms": True,
             "role": "OPERADOR",
             "is_active": True,
         },
@@ -426,6 +430,7 @@ def test_company_admin_cannot_mint_a_platform_owner(tenants):
             "name": "Falso Dono",
             "email": f"falso.{uuid.uuid4().hex[:8]}@teste-saas.com",
             "password": PASSWORD,
+            "accept_terms": True,
             "role": "PLATFORM_OWNER",
             "is_active": True,
         },

@@ -33,6 +33,7 @@ def test_legitimate_signup_succeeds():
                 "company_name": "Tscheck Signup Co",
                 "email": email,
                 "password": "Empresa@2026",
+                "accept_terms": True,
             },
         )
         assert resp.status_code == 201, resp.text
@@ -49,6 +50,7 @@ def test_legitimate_signup_succeeds():
                 "company_name": "Tscheck Signup Co",
                 "email": email,
                 "password": "Empresa@2026",
+                "accept_terms": True,
             },
         )
         assert dupe.status_code == 409, dupe.text

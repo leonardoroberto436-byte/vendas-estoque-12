@@ -1,8 +1,9 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   AlertTriangle,
   ArrowLeftRight,
   Building2,
+  CreditCard,
   FileBarChart,
   LayoutDashboard,
   LogOut,
@@ -157,6 +158,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 Painel Admin
               </NavLink>
             )}
+            {isAdmin && (
+              <NavLink
+                to="/assinatura"
+                data-testid="nav-subscription"
+                className={cn(
+                  "inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium transition-colors duration-150 ease-out",
+                  location.pathname.startsWith("/assinatura")
+                    ? "bg-slate-900 text-white"
+                    : "text-teal-700 hover:bg-teal-50",
+                )}
+              >
+                <CreditCard className="size-4" />
+                Minha assinatura
+              </NavLink>
+            )}
           </nav>
         </div>
       </header>
@@ -168,15 +184,28 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         >
           Assinatura {SUBSCRIPTION_LABELS[user.organization.subscription_status].toLowerCase()} —
           regularize o pagamento para manter o acesso.
+          {isAdmin && (
+            <Link to="/assinatura" className="ml-2 font-semibold underline">
+              Ver assinatura
+            </Link>
+          )}
         </div>
       )}
-      {user?.organization && user.organization.plan === "TESTE" && user.organization.trial_days_left !== null && (
+      {user?.organization &&
+        user.organization.plan === "TESTE" &&
+        user.organization.trial_days_left !== null &&
+        !user.organization.billing_block && (
         <div
           className="border-b border-sky-200 bg-sky-50 px-5 py-2.5 text-center text-sm font-medium text-sky-900 print:hidden"
           data-testid="trial-banner"
         >
           Período de teste: {user.organization.trial_days_left} dias restantes ·
           empresa {ORG_STATUS_LABELS[user.organization.status].toLowerCase()}
+          {isAdmin && (
+            <Link to="/assinatura" className="ml-2 font-semibold underline" data-testid="trial-banner-choose-plan">
+              Escolher plano
+            </Link>
+          )}
         </div>
       )}
 

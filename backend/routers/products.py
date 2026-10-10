@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 
 from lib.auth import Principal, require, require_org, scoped
 from lib.db import db
+from lib.plans import ensure_can_add
 from models.inventory import Product, ProductCreate, ProductUpdate, StockMovement
 
 router = APIRouter(prefix="/products", tags=["products"])
@@ -66,6 +67,7 @@ async def get_product(product_id: str, principal: Principal = Depends(require_or
 async def create_product(
     payload: ProductCreate, principal: Principal = Depends(require("products:write"))
 ):
+    await ensure_can_add(principal.org_id, "products", "produtos")
     sku = payload.sku.strip().upper()
     # SKU is unique per company, not globally — two companies may use the same code
     existing = await db.products.find_one(scoped(principal, {"sku": sku}))

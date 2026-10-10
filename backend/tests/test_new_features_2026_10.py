@@ -44,7 +44,7 @@ def _approved_company(tag: str) -> dict:
     with _client() as c:
         resp = c.post(
             "/auth/signup",
-            json={"name": f"Dono {tag}", "company_name": name, "email": email, "password": PASSWORD},
+            json={"name": f"Dono {tag}", "company_name": name, "email": email, "password": PASSWORD, "accept_terms": True},
         )
     assert resp.status_code == 201, resp.text
     org_id = resp.json()["organization_id"]
@@ -166,8 +166,9 @@ def test_expired_trial_blocks_until_owner_picks_a_plan(company):
         assert resp.status_code == 200, resp.text
         assert resp.json()["trial_expired"] is True
 
-    with _client() as c:
-        blocked = c.post("/auth/login", json={"email": company["email"], "password": PASSWORD})
+    # o admin entra, mas só a assinatura funciona até escolher um plano
+    with _session(company["email"], PASSWORD) as admin:
+        blocked = admin.get("/products")
         assert blocked.status_code == 403, blocked.text
         assert "teste" in blocked.json()["detail"].lower()
 

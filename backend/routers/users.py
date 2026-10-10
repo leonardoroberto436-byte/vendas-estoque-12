@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from lib.auth import Principal, hash_password, require, scoped
 from lib.db import db
 from lib.password_policy import validate_new_password
+from lib.plans import ensure_can_add
 from models.users import AccessLog, PasswordReset, User, UserCreate, UserUpdate
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -71,6 +72,7 @@ async def create_user(payload: UserCreate, principal: Principal = Depends(_manag
         raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.")
     # same rule as every other password change (10+ chars, letters and numbers)
     validate_new_password(payload.password)
+    await ensure_can_add(principal.org_id, "users", "usuários")
 
     user = User(
         name=payload.name.strip(),

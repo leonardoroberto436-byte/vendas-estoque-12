@@ -14,7 +14,9 @@ from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 
 from lib.auth import (
     RESET_TOKEN_MINUTES,
+    TRIAL_OVER_MESSAGE,
     Principal,
+    trial_expired,
     create_session,
     destroy_session,
     get_current_user,
@@ -26,7 +28,7 @@ from lib.db import db
 from lib.email import send_password_reset, send_signup_pending
 from lib.subscriptions import days_until
 from lib.password_policy import validate_new_password
-from lib.throttle import clear_throttle, throttle
+from lib.throttle import clear_throttle, client_ip, throttle
 from models.org import (
     TRIAL_DAYS,
     ForgotPasswordRequest,
@@ -52,12 +54,7 @@ def _aware(value):
 async def _log_access(
     request: Request, event: str, email: str, user: dict | None = None
 ) -> None:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    ip = (
-        forwarded.split(",")[0].strip()
-        if forwarded
-        else (request.client.host if request.client else "")
-    )
+    ip = client_ip(request)  # same trusted-hop rule as the throttle — not spoofable
     entry = AccessLog(
         user_id=user["id"] if user else None,
         org_id=user.get("org_id") if user else None,
@@ -87,6 +84,7 @@ def _org_summary(org: dict | None) -> OrgSummary | None:
         subscription_status=org["subscription_status"],
         trial_ends_at=trial_ends,
         trial_days_left=days_left,
+        trial_expired=trial_expired(org),
         due_date=_aware(org.get("due_date")),
         days_to_due=days_until(org.get("due_date")),
     )
@@ -127,6 +125,7 @@ async def signup(payload: SignupRequest, request: Request):
     )
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Já existe uma conta com este e-mail.")
+    validate_new_password(payload.password)
 
     org = Organization(
         name=payload.company_name.strip(),
@@ -205,6 +204,9 @@ async def login(payload: LoginRequest, request: Request, response: Response):
             raise HTTPException(
                 status_code=403, detail="Assinatura cancelada. Fale com o suporte para reativar."
             )
+        if trial_expired(org):
+            await _log_access(request, "LOGIN_BLOQUEADO", email, user)
+            raise HTTPException(status_code=403, detail=TRIAL_OVER_MESSAGE)
 
     now = datetime.now(timezone.utc)
     await db.users.update_one({"id": user["id"]}, {"$set": {"last_login_at": now}})

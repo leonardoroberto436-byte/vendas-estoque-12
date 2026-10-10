@@ -61,6 +61,27 @@ PERMISSIONS: dict[str, frozenset[str]] = {
 # Subscription states that still allow working in the app.
 _LIVE_SUBSCRIPTIONS = frozenset({"TESTE", "ATIVO", "INADIMPLENTE"})
 
+TRIAL_OVER_MESSAGE = (
+    "O período de teste grátis da sua empresa terminou. "
+    "Fale com o suporte para escolher um plano e continuar usando."
+)
+
+
+def trial_expired(org: dict | None) -> bool:
+    """A company still on the free trial whose trial end date has passed.
+
+    The platform owner ends this state by moving the company to a paid plan
+    (subscription ATIVO) or by giving it a new trial end date.
+    """
+    if not org or org.get("subscription_status") != "TESTE":
+        return False
+    ends = org.get("trial_ends_at")
+    if not isinstance(ends, datetime):
+        return False
+    if ends.tzinfo is None:
+        ends = ends.replace(tzinfo=timezone.utc)
+    return ends < datetime.now(timezone.utc)
+
 
 # ----------------------------------------------------------------- passwords
 def hash_password(password: str) -> str:
@@ -187,6 +208,8 @@ async def get_current_user(ev_session: str | None = Cookie(default=None)) -> Pri
             raise HTTPException(
                 status_code=403, detail="Assinatura cancelada. Fale com o suporte para reativar."
             )
+        if trial_expired(org):
+            raise HTTPException(status_code=403, detail=TRIAL_OVER_MESSAGE)
         org_name = org.get("name", "")
 
     return Principal(

@@ -88,6 +88,8 @@ class OrgSummary(BaseModel):
     subscription_status: SubscriptionStatus
     trial_ends_at: Optional[datetime] = None
     trial_days_left: Optional[int] = None
+    # teste grátis vencido: a empresa fica bloqueada até o dono escolher um plano
+    trial_expired: bool = False
     due_date: Optional[datetime] = None
     days_to_due: Optional[int] = None
 
@@ -223,4 +225,46 @@ class BackupRecord(BaseModel):
     size_bytes: int
     status: str
     error: str = ""
+    # cópia fora do servidor: ENVIADO, FALHOU, NAO_CONFIGURADO (ou vazio em backups antigos)
+    offsite: str = ""
     created_at: datetime
+
+
+class BackupSettings(BaseModel):
+    offsite_configured: bool
+    keep: int
+
+
+class RestoreOrgRequest(BaseModel):
+    org_id: str
+    # False = só mostra o que seria restaurado; True = grava (com backup de segurança antes)
+    confirm: bool = False
+
+
+class RestoreResult(BaseModel):
+    org_id: str
+    org_name: str
+    file: str
+    counts: dict[str, int]
+    applied: bool
+    safety_backup: str = ""
+    message: str
+
+
+class OrgDeleteRequest(BaseModel):
+    # o nome da empresa digitado de novo — evita excluir a empresa errada sem querer
+    confirm_name: str
+
+
+class OrgBulkDeleteRequest(BaseModel):
+    ids: List[str] = Field(min_length=1, max_length=500)
+    # precisa ser exatamente "EXCLUIR"
+    confirm: str
+
+
+class DeleteResult(BaseModel):
+    deleted_orgs: int
+    deleted_users: int
+    deleted_records: int
+    safety_backup: str
+    message: str

@@ -43,4 +43,4 @@ export const apiPost = <T>(path: string, body?: JsonBody) => request<T>("POST", 
 export const apiPut = <T>(path: string, body?: JsonBody) => request<T>("PUT", path, body ?? null);
 export const apiPatch = <T>(path: string, body?: JsonBody) =>
   request<T>("PATCH", path, body ?? null);
-export const apiDelete = <T>(path: string) => request<T>("DELETE", path);
+export const apiDelete = <T>(path: string, body?: JsonBody) => request<T>("DELETE", path, body);

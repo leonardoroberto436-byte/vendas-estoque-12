@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
+  ArchiveRestore,
   Ban,
   Building2,
   CheckCircle2,
@@ -18,13 +20,17 @@ import {
   ScrollText,
   TrendingUp,
   ShieldCheck,
+  Trash2,
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { apiGet, apiPost, apiPut } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
 import type {
   OrgCredentials,
   BackupRecord,
+  BackupSettings,
+  DeleteResult,
+  RestoreResult,
   PlanPrices,
   PlatformLog,
   PlatformRevenue,
@@ -59,6 +65,7 @@ import { endSession } from "@/lib/session";
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -76,6 +83,16 @@ import {
 } from "@/components/ui/table";
 
 const isoDate = (value: string | null) => (value ? value.slice(0, 10) : null);
+
+/** Conta sem uso: nenhuma venda e nenhum produto cadastrado (típico de cadastro de teste). */
+const isUnused = (org: PlatformOrgView) =>
+  org.sales_count === 0 && org.product_count === 0 && org.subscription_status !== "ATIVO";
+
+const OFFSITE_LABELS: Record<string, string> = {
+  ENVIADO: "cópia externa ok",
+  FALHOU: "cópia externa falhou",
+  NAO_CONFIGURADO: "só no servidor",
+};
 
 const PLANS: Plan[] = ["TESTE", "INICIAL", "PROFISSIONAL", "AVANCADO"];
 const SUBSCRIPTIONS: SubscriptionStatus[] = ["TESTE", "ATIVO", "INADIMPLENTE", "CANCELADO"];
@@ -98,6 +115,17 @@ export default function Platform() {
   const [editForm, setEditForm] = useState({ name: "", owner_name: "", owner_email: "" });
   const [credentials, setCredentials] = useState<OrgCredentials | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<string, string> | null>(null);
+  // remoção de contas
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [deletingOrg, setDeletingOrg] = useState<PlatformOrgView | null>(null);
+  const [deleteName, setDeleteName] = useState("");
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkConfirm, setBulkConfirm] = useState("");
+  const [deletingUser, setDeletingUser] = useState<PlatformUserView | null>(null);
+  // restauração de backup
+  const [restoreBackup, setRestoreBackup] = useState<BackupRecord | null>(null);
+  const [restoreOrgId, setRestoreOrgId] = useState("");
+  const [restorePreview, setRestorePreview] = useState<RestoreResult | null>(null);
 
   const { data: stats } = useQuery({
     queryKey: ["platform-stats"],
@@ -129,6 +157,11 @@ export default function Platform() {
     queryFn: () => apiGet<BackupRecord[]>("/platform/backups"),
     refetchOnWindowFocus: false,
   });
+  const { data: backupSettings } = useQuery({
+    queryKey: ["platform-backup-settings"],
+    queryFn: () => apiGet<BackupSettings>("/platform/backups/settings"),
+    refetchOnWindowFocus: false,
+  });
   const { data: userData } = useQuery({
     queryKey: ["platform-users"],
     queryFn: () => apiGet<PlatformUserView[]>("/platform/users"),
@@ -137,6 +170,17 @@ export default function Platform() {
 
   const orgs = orgError ? [] : (orgData ?? []);
   const users = userData ?? [];
+  const unusedOrgs = orgs.filter(isUnused);
+  const selectedOrgs = orgs.filter((org) => selected.has(org.id));
+  const allSelected = orgs.length > 0 && selectedOrgs.length === orgs.length;
+
+  const toggleSelected = (id: string, checked: boolean) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (checked) next.add(id);
+      else next.delete(id);
+      return next;
+    });
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["platform-stats"] });
@@ -144,7 +188,61 @@ export default function Platform() {
     void queryClient.invalidateQueries({ queryKey: ["platform-users"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-revenue"] });
     void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
+    void queryClient.invalidateQueries({ queryKey: ["platform-backups"] });
   };
+
+  const deleteOrg = useMutation({
+    mutationFn: ({ id, confirm_name }: { id: string; confirm_name: string }) =>
+      apiDelete<DeleteResult>(`/platform/organizations/${id}`, { confirm_name }),
+    onSuccess: (result, variables) => {
+      setDeletingOrg(null);
+      setDeleteName("");
+      toggleSelected(variables.id, false);
+      toast.success(result.message);
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível excluir a empresa")),
+  });
+
+  const bulkDelete = useMutation({
+    mutationFn: (ids: string[]) =>
+      apiPost<DeleteResult>("/platform/organizations/bulk-delete", { ids, confirm: bulkConfirm }),
+    onSuccess: (result) => {
+      setBulkOpen(false);
+      setBulkConfirm("");
+      setSelected(new Set());
+      toast.success(result.message);
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível excluir as empresas")),
+  });
+
+  const deleteUser = useMutation({
+    mutationFn: (id: string) => apiDelete<void>(`/platform/users/${id}`),
+    onSuccess: () => {
+      setDeletingUser(null);
+      toast.success("Usuário removido");
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível remover o usuário")),
+  });
+
+  const restore = useMutation({
+    mutationFn: ({ file, org_id, confirm }: { file: string; org_id: string; confirm: boolean }) =>
+      apiPost<RestoreResult>(`/platform/backups/${file}/restore`, { org_id, confirm }),
+    onSuccess: (result) => {
+      if (result.applied) {
+        setRestoreBackup(null);
+        setRestorePreview(null);
+        setRestoreOrgId("");
+        toast.success(result.message);
+        refresh();
+      } else {
+        setRestorePreview(result);
+      }
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível restaurar")),
+  });
 
   const createOrg = useMutation({
     mutationFn: () =>
@@ -507,6 +605,33 @@ export default function Platform() {
             <CardTitle className="text-base font-bold tracking-tight text-white">
               Empresas cadastradas
             </CardTitle>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+            {unusedOrgs.length > 0 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                data-testid="platform-select-unused-button"
+                title="Marca as empresas sem nenhuma venda e sem produtos cadastrados (que não estão com assinatura ativa)"
+                onClick={() => setSelected(new Set(unusedOrgs.map((org) => org.id)))}
+              >
+                Selecionar sem uso ({unusedOrgs.length})
+              </Button>
+            )}
+            {selectedOrgs.length > 0 && (
+              <Button
+                size="sm"
+                variant="destructive"
+                data-testid="platform-bulk-delete-button"
+                onClick={() => {
+                  setBulkConfirm("");
+                  setBulkOpen(true);
+                }}
+              >
+                <Trash2 className="size-4" />
+                Excluir selecionadas ({selectedOrgs.length})
+              </Button>
+            )}
             <Button
               size="sm"
               data-testid="platform-new-org-button"
@@ -518,12 +643,23 @@ export default function Platform() {
               <Plus className="size-4" />
               Nova Empresa
             </Button>
+            </div>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
               <Table data-testid="platform-orgs-table">
                 <TableHeader>
                   <TableRow className="border-white/10 hover:bg-transparent">
+                    <TableHead className="w-10">
+                      <Checkbox
+                        checked={allSelected}
+                        onCheckedChange={(checked) =>
+                          setSelected(checked === true ? new Set(orgs.map((org) => org.id)) : new Set())
+                        }
+                        aria-label="Selecionar todas as empresas"
+                        data-testid="platform-org-select-all"
+                      />
+                    </TableHead>
                     <TableHead className="text-slate-400">Empresa</TableHead>
                     <TableHead className="text-slate-400">Situação</TableHead>
                     <TableHead className="text-slate-400">Plano</TableHead>
@@ -541,6 +677,14 @@ export default function Platform() {
                       className="border-white/10 hover:bg-white/5"
                       data-testid={`platform-org-row-${org.id}`}
                     >
+                      <TableCell>
+                        <Checkbox
+                          checked={selected.has(org.id)}
+                          onCheckedChange={(checked) => toggleSelected(org.id, checked === true)}
+                          aria-label={`Selecionar ${org.name}`}
+                          data-testid={`platform-org-select-${org.id}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         <p className="font-semibold text-white">{org.name}</p>
                         <p className="text-xs text-slate-400">
@@ -582,10 +726,21 @@ export default function Platform() {
                             ))}
                           </SelectContent>
                         </Select>
-                        {org.trial_days_left !== null && org.plan === "TESTE" && (
-                          <p className="mt-1 text-[11px] text-slate-400">
-                            {org.trial_days_left} dias de teste restantes
+                        {org.trial_expired ? (
+                          <p
+                            className="mt-1 text-[11px] font-semibold text-red-400"
+                            data-testid={`platform-org-trial-expired-${org.id}`}
+                            title="A empresa está bloqueada. Mude para um plano pago com assinatura Ativa, ou escolha uma nova data de vencimento para prorrogar o teste."
+                          >
+                            Teste encerrado · empresa bloqueada
                           </p>
+                        ) : (
+                          org.trial_days_left !== null &&
+                          org.plan === "TESTE" && (
+                            <p className="mt-1 text-[11px] text-slate-400">
+                              {org.trial_days_left} dias de teste restantes
+                            </p>
+                          )
                         )}
                       </TableCell>
                       <TableCell>
@@ -651,6 +806,11 @@ export default function Platform() {
                       </TableCell>
                       <TableCell className="text-right font-mono text-xs tabular-nums text-slate-300">
                         {org.user_count} usu. · {org.product_count} prod. · {org.sales_count} vendas
+                        {isUnused(org) && (
+                          <span className="ml-2 rounded border border-white/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-slate-400">
+                            sem uso
+                          </span>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
@@ -713,13 +873,26 @@ export default function Platform() {
                               <RotateCcw className="size-4 text-teal-400" />
                             </Button>
                           )}
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Excluir ${org.name}`}
+                            title="Excluir empresa e todos os dados dela"
+                            data-testid={`platform-org-delete-btn-${org.id}`}
+                            onClick={() => {
+                              setDeleteName("");
+                              setDeletingOrg(org);
+                            }}
+                          >
+                            <Trash2 className="size-4 text-red-400" />
+                          </Button>
                         </div>
                       </TableCell>
                     </TableRow>
                   ))}
                   {orgs.length === 0 && (
                     <TableRow className="border-white/10">
-                      <TableCell colSpan={8} className="py-10 text-center text-sm text-slate-400">
+                      <TableCell colSpan={9} className="py-10 text-center text-sm text-slate-400">
                         Nenhuma empresa cadastrada ainda.
                       </TableCell>
                     </TableRow>
@@ -746,6 +919,7 @@ export default function Platform() {
                     <TableHead className="text-slate-400">Perfil</TableHead>
                     <TableHead className="text-slate-400">Situação</TableHead>
                     <TableHead className="text-slate-400">Último login</TableHead>
+                    <TableHead className="text-right text-slate-400">Ações</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -775,11 +949,25 @@ export default function Platform() {
                       <TableCell className="font-mono text-xs tabular-nums text-slate-400">
                         {item.last_login_at ? formatDateTime(item.last_login_at) : "nunca entrou"}
                       </TableCell>
+                      <TableCell className="text-right">
+                        {item.role !== "PLATFORM_OWNER" && (
+                          <Button
+                            size="icon-sm"
+                            variant="ghost"
+                            aria-label={`Remover ${item.email}`}
+                            title="Remover este usuário"
+                            data-testid={`platform-user-delete-btn-${item.id}`}
+                            onClick={() => setDeletingUser(item)}
+                          >
+                            <Trash2 className="size-4 text-red-400" />
+                          </Button>
+                        )}
+                      </TableCell>
                     </TableRow>
                   ))}
                   {users.length === 0 && (
                     <TableRow className="border-white/10">
-                      <TableCell colSpan={5} className="py-10 text-center text-sm text-slate-400">
+                      <TableCell colSpan={6} className="py-10 text-center text-sm text-slate-400">
                         Nenhum usuário cadastrado.
                       </TableCell>
                     </TableRow>
@@ -795,7 +983,11 @@ export default function Platform() {
           estão estruturados (teste, ativo, inadimplente, cancelado), mas nenhuma cobrança real é
           feita — a integração com o provedor de pagamentos será implementada depois. Alterar o
           status aqui só muda o acesso: <em>cancelado</em> bloqueia o login da empresa,{" "}
-          <em>inadimplente</em> apenas sinaliza e mantém o acesso.
+          <em>inadimplente</em> apenas sinaliza e mantém o acesso. Automático: quando o{" "}
+          <em>teste grátis</em> termina, a empresa fica bloqueada até você mudar o plano para pago
+          (assinatura <em>ativo</em>) ou escolher uma nova data na coluna Vencimento para prorrogar o
+          teste; quando o vencimento de uma assinatura <em>ativa</em> passa, ela vira{" "}
+          <em>inadimplente</em> sozinha.
         </p>
         <div className="mt-6 grid gap-6 lg:grid-cols-2">
           <Card className="border-white/10 bg-slate-900 shadow-none">
@@ -818,9 +1010,23 @@ export default function Platform() {
             </CardHeader>
             <CardContent>
               <p className="mb-3 text-xs text-slate-400">
-                Automático todo dia às 6h (horário de Brasília). Mantemos os 7 mais recentes.
-                Baixe e guarde fora do servidor.
+                Automático todo dia às 6h (horário de Brasília). Mantemos os{" "}
+                {backupSettings?.keep ?? 7} mais recentes no servidor. Antes de excluir ou restaurar
+                uma empresa, um backup novo é feito sozinho.
               </p>
+              {backupSettings && !backupSettings.offsite_configured && (
+                <div
+                  className="mb-3 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200"
+                  data-testid="platform-backup-offsite-warning"
+                >
+                  <AlertTriangle className="size-4 shrink-0 text-amber-400" />
+                  <span>
+                    A cópia fora do servidor ainda não está ligada: se o servidor tiver um problema,
+                    os backups somem junto. Ligue o armazenamento externo (veja o guia) ou baixe um
+                    backup por semana e guarde no seu computador.
+                  </span>
+                </div>
+              )}
               <div className="space-y-2" data-testid="platform-backups-list">
                 {(backupData ?? []).length === 0 && (
                   <p className="py-6 text-center text-sm text-slate-400">
@@ -840,9 +1046,37 @@ export default function Platform() {
                         {backup.status === "OK"
                           ? `${(backup.size_bytes / 1024).toFixed(0)} KB`
                           : `falhou — ${backup.error}`}
+                        {backup.status === "OK" && OFFSITE_LABELS[backup.offsite] && (
+                          <span
+                            className={
+                              backup.offsite === "ENVIADO"
+                                ? " text-emerald-400"
+                                : backup.offsite === "FALHOU"
+                                  ? " text-red-400"
+                                  : " text-slate-500"
+                            }
+                          >
+                            {" "}
+                            · {OFFSITE_LABELS[backup.offsite]}
+                          </span>
+                        )}
                       </p>
                     </div>
                     {backup.status === "OK" && (
+                      <div className="flex shrink-0 gap-1">
+                      <button
+                        type="button"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/20 px-2 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-white/10"
+                        data-testid={`platform-backup-restore-${backup.id}`}
+                        onClick={() => {
+                          setRestorePreview(null);
+                          setRestoreOrgId("");
+                          setRestoreBackup(backup);
+                        }}
+                      >
+                        <ArchiveRestore className="size-3.5" />
+                        Restaurar
+                      </button>
                       <a
                         href={`/api/platform/backups/${backup.file}/download`}
                         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/20 px-2 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-white/10"
@@ -851,6 +1085,7 @@ export default function Platform() {
                         <Download className="size-3.5" />
                         Baixar
                       </a>
+                      </div>
                     )}
                   </div>
                 ))}
@@ -1058,6 +1293,225 @@ export default function Platform() {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deletingOrg !== null}
+        onOpenChange={(open) => !open && setDeletingOrg(null)}
+      >
+        <DialogContent className="sm:max-w-md" data-testid="platform-delete-org-dialog">
+          <DialogHeader>
+            <DialogTitle>Excluir empresa</DialogTitle>
+            <DialogDescription>
+              Apaga <strong>{deletingOrg?.name}</strong> com todos os usuários, produtos, vendas,
+              devoluções e movimentações. Um backup é feito antes, então dá para trazer de volta pela
+              restauração de backup.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label htmlFor="delete-org-name">Digite o nome da empresa para confirmar</Label>
+            <Input
+              id="delete-org-name"
+              autoComplete="off"
+              placeholder={deletingOrg?.name}
+              value={deleteName}
+              onChange={(e) => setDeleteName(e.target.value)}
+              data-testid="platform-delete-org-name-input"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingOrg(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={
+                !deletingOrg ||
+                deleteName.trim() !== deletingOrg.name.trim() ||
+                deleteOrg.isPending
+              }
+              data-testid="platform-delete-org-confirm-button"
+              onClick={() =>
+                deletingOrg && deleteOrg.mutate({ id: deletingOrg.id, confirm_name: deleteName })
+              }
+            >
+              <Trash2 className="size-4" />
+              {deleteOrg.isPending ? "Excluindo..." : "Excluir definitivamente"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={bulkOpen} onOpenChange={setBulkOpen}>
+        <DialogContent className="sm:max-w-md" data-testid="platform-bulk-delete-dialog">
+          <DialogHeader>
+            <DialogTitle>Excluir {selectedOrgs.length} empresa(s)</DialogTitle>
+            <DialogDescription>
+              Todas serão apagadas com seus usuários e dados. Um backup é feito antes.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="max-h-40 space-y-1 overflow-y-auto rounded-lg border p-3 text-sm">
+            {selectedOrgs.map((org) => (
+              <li key={org.id} className="flex justify-between gap-3">
+                <span className="truncate font-medium">{org.name}</span>
+                <span className="shrink-0 text-xs text-muted-foreground">
+                  {org.sales_count} vendas · {org.product_count} prod.
+                </span>
+              </li>
+            ))}
+          </ul>
+          {selectedOrgs.some((org) => !isUnused(org)) && (
+            <p className="text-xs font-medium text-red-600">
+              Atenção: há empresas com vendas, produtos ou assinatura ativa na seleção.
+            </p>
+          )}
+          <div className="grid gap-2">
+            <Label htmlFor="bulk-confirm">Digite EXCLUIR para confirmar</Label>
+            <Input
+              id="bulk-confirm"
+              autoComplete="off"
+              value={bulkConfirm}
+              onChange={(e) => setBulkConfirm(e.target.value)}
+              data-testid="platform-bulk-delete-confirm-input"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkOpen(false)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={bulkConfirm.trim().toUpperCase() !== "EXCLUIR" || bulkDelete.isPending}
+              data-testid="platform-bulk-delete-confirm-button"
+              onClick={() => bulkDelete.mutate(selectedOrgs.map((org) => org.id))}
+            >
+              <Trash2 className="size-4" />
+              {bulkDelete.isPending ? "Excluindo..." : "Excluir todas"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={deletingUser !== null}
+        onOpenChange={(open) => !open && setDeletingUser(null)}
+      >
+        <DialogContent className="sm:max-w-md" data-testid="platform-delete-user-dialog">
+          <DialogHeader>
+            <DialogTitle>Remover usuário</DialogTitle>
+            <DialogDescription>
+              Remove o login <strong>{deletingUser?.email}</strong> ({deletingUser?.org_name}). A
+              empresa e as vendas dela continuam.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingUser(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={deleteUser.isPending}
+              data-testid="platform-delete-user-confirm-button"
+              onClick={() => deletingUser && deleteUser.mutate(deletingUser.id)}
+            >
+              <Trash2 className="size-4" />
+              {deleteUser.isPending ? "Removendo..." : "Remover"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={restoreBackup !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setRestoreBackup(null);
+            setRestorePreview(null);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-lg" data-testid="platform-restore-dialog">
+          <DialogHeader>
+            <DialogTitle>Restaurar dados de uma empresa</DialogTitle>
+            <DialogDescription>
+              Devolve os dados da empresa escolhida como estavam no backup{" "}
+              <span className="font-mono">{restoreBackup?.file}</span>. O que foi criado depois do
+              backup não é apagado, e um backup do estado atual é feito antes.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <Label>Empresa</Label>
+            <Select
+              value={restoreOrgId}
+              onValueChange={(value: string) => {
+                setRestoreOrgId(value);
+                setRestorePreview(null);
+              }}
+            >
+              <SelectTrigger data-testid="platform-restore-org-select">
+                <SelectValue>
+                  {(value) => orgs.find((org) => org.id === value)?.name ?? "Escolha a empresa"}
+                </SelectValue>
+              </SelectTrigger>
+              <SelectContent>
+                {orgs.map((org) => (
+                  <SelectItem key={org.id} value={org.id}>
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Empresa excluída por engano? Ela não aparece na lista — peça ao suporte técnico para
+              restaurar pelo script com o id dela.
+            </p>
+          </div>
+          {restorePreview && (
+            <div className="rounded-lg border bg-muted/40 p-3 text-sm" data-testid="platform-restore-preview">
+              <p className="mb-2 font-semibold">
+                No backup, {restorePreview.org_name} tem:
+              </p>
+              <ul className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                {Object.entries(restorePreview.counts).map(([name, count]) => (
+                  <li key={name} className="flex justify-between gap-2">
+                    <span className="text-muted-foreground">{name}</span>
+                    <span className="font-mono tabular-nums">{count}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoreBackup(null)}>
+              Cancelar
+            </Button>
+            {!restorePreview ? (
+              <Button
+                disabled={!restoreOrgId || restore.isPending}
+                data-testid="platform-restore-preview-button"
+                onClick={() =>
+                  restoreBackup &&
+                  restore.mutate({ file: restoreBackup.file, org_id: restoreOrgId, confirm: false })
+                }
+              >
+                {restore.isPending ? "Conferindo..." : "Conferir"}
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                disabled={restore.isPending}
+                data-testid="platform-restore-confirm-button"
+                onClick={() =>
+                  restoreBackup &&
+                  restore.mutate({ file: restoreBackup.file, org_id: restoreOrgId, confirm: true })
+                }
+              >
+                <ArchiveRestore className="size-4" />
+                {restore.isPending ? "Restaurando..." : "Restaurar agora"}
+              </Button>
+            )}
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

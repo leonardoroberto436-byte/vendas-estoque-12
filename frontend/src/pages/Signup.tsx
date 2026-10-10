@@ -37,7 +37,7 @@ export default function Signup() {
     if (name.trim().length < 2) return setError("Informe seu nome completo.");
     if (company.trim().length < 2) return setError("Informe o nome da empresa.");
     if (!email.includes("@")) return setError("Informe um e-mail válido.");
-    if (password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
+    if (password.length < 10) return setError("A senha precisa ter pelo menos 10 caracteres, com letras e números.");
     if (password !== confirm) return setError("A confirmação não confere com a senha.");
     signup.mutate();
   };

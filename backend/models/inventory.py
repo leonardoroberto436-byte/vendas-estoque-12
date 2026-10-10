@@ -236,6 +236,11 @@ class MonthlyReport(BaseModel):
     cost: float
     profit: float
     discount_total: float
+    # devoluções feitas no mês — o faturamento/lucro "líquidos" já as descontam
+    refunds_total: float = 0.0
+    refunds_count: int = 0
+    net_revenue: float = 0.0
+    net_profit: float = 0.0
     margin_percent: float
     average_ticket: float
     best_day: Optional[int] = None

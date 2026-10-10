@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Building2, ImageUp, Trash2 } from "lucide-react";
+import { Building2, Download, ImageUp, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { apiGet, apiPut } from "@/lib/api";
 import type { OrgBranding } from "@/lib/types";
@@ -192,6 +192,27 @@ export default function Company() {
               PNG ou JPG, até 300 KB. Clique em <strong>Salvar dados da empresa</strong> para
               aplicar.
             </p>
+          </CardContent>
+        </Card>
+
+        <Card className="border-slate-200/90 shadow-xs lg:col-span-2" data-testid="company-export-card">
+          <CardHeader>
+            <CardTitle className="text-base font-bold tracking-tight">Cópia dos seus dados</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-2xl text-sm text-slate-600">
+              Baixe uma planilha com todos os produtos, vendas, devoluções e movimentações de
+              estoque da sua loja. Os dados também são copiados automaticamente todos os dias,
+              mas é bom guardar uma cópia sua de vez em quando.
+            </p>
+            <a
+              href="/api/settings/export.xlsx"
+              className="inline-flex shrink-0 items-center gap-2 rounded-lg border border-input bg-white px-4 py-2.5 text-sm font-semibold text-slate-800 shadow-xs transition-colors duration-150 ease-out hover:bg-slate-50 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:ring-offset-2"
+              data-testid="company-export-xlsx-btn"
+            >
+              <Download className="size-4" />
+              Baixar planilha
+            </a>
           </CardContent>
         </Card>
       </div>

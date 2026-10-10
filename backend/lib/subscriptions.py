@@ -62,6 +62,7 @@ async def run_due_reminders() -> dict:
     prices = await get_plan_prices()
     orgs = await db.organizations.find({"status": "APROVADA"}).to_list(5000)
     sent, skipped = 0, 0
+    marked_late = await mark_overdue(orgs)
 
     for org in orgs:
         due = aware(org.get("due_date"))
@@ -95,5 +96,42 @@ async def run_due_reminders() -> dict:
         )
         sent += 1
 
-    logger.info("Avisos de vencimento: %s enviados, %s já enviados antes", sent, skipped)
-    return {"sent": sent, "skipped": skipped, "checked": len(orgs)}
+    logger.info(
+        "Avisos de vencimento: %s enviados, %s já enviados antes, %s marcadas inadimplentes",
+        sent,
+        skipped,
+        marked_late,
+    )
+    return {"sent": sent, "skipped": skipped, "checked": len(orgs), "marked_late": marked_late}
+
+
+async def mark_overdue(orgs: list[dict]) -> int:
+    """ATIVO companies whose due date has passed become INADIMPLENTE.
+
+    They keep working (the owner decides when to suspend), but the owner panel
+    and the revenue numbers show at once who is late. Paying again is recorded
+    by the owner setting a new due date with subscription ATIVO.
+    """
+    from lib.backups import log_platform_action  # local import: avoids a cycle at startup
+
+    changed = 0
+    for org in orgs:
+        if org.get("subscription_status") != "ATIVO":
+            continue
+        left = days_until(org.get("due_date"))
+        if left is None or left >= 0:
+            continue
+        result = await db.organizations.update_one(
+            {"id": org["id"], "subscription_status": "ATIVO"},
+            {"$set": {"subscription_status": "INADIMPLENTE"}},
+        )
+        if result.modified_count:
+            org["subscription_status"] = "INADIMPLENTE"
+            changed += 1
+            await log_platform_action(
+                actor_email="sistema",
+                action="INADIMPLENTE_AUTOMATICO",
+                target=org.get("name", ""),
+                details=f"vencimento passou há {-left} dia(s)",
+            )
+    return changed

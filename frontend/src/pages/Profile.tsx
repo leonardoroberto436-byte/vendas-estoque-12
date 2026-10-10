@@ -37,8 +37,8 @@ export default function Profile() {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
-    if (next.length < 8) {
-      setError("A nova senha precisa ter pelo menos 8 caracteres.");
+    if (next.length < 10) {
+      setError("A nova senha precisa ter pelo menos 10 caracteres, com letras e números.");
       return;
     }
     if (next !== confirm) {
@@ -123,7 +123,7 @@ export default function Profile() {
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="cp-new">Nova senha (mín. 8 caracteres)</Label>
+                <Label htmlFor="cp-new">Nova senha (mín. 10 caracteres, letras e números)</Label>
                 <Input
                   id="cp-new"
                   type="password"

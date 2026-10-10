@@ -15,6 +15,8 @@ export interface OrgSummary {
   subscription_status: SubscriptionStatus;
   trial_ends_at: string | null;
   trial_days_left: number | null;
+  /** teste grátis encerrado: a empresa fica bloqueada até ganhar um plano */
+  trial_expired?: boolean;
   due_date: string | null;
   days_to_due: number | null;
 }
@@ -56,7 +58,37 @@ export interface BackupRecord {
   size_bytes: number;
   status: string;
   error: string;
+  /** cópia fora do servidor: ENVIADO | FALHOU | NAO_CONFIGURADO | "" (backups antigos) */
+  offsite: string;
   created_at: string;
+}
+
+export interface BackupSettings {
+  offsite_configured: boolean;
+  keep: number;
+}
+
+export interface RestoreResult {
+  org_id: string;
+  org_name: string;
+  file: string;
+  counts: Record<string, number>;
+  applied: boolean;
+  safety_backup: string;
+  message: string;
+}
+
+export interface DeleteResult {
+  deleted_orgs: number;
+  deleted_users: number;
+  deleted_records: number;
+  safety_backup: string;
+  message: string;
+}
+
+/** Liga/desliga dos alertas de estoque da empresa. */
+export interface AlertSettings {
+  low_stock_enabled: boolean;
 }
 
 export interface OrgBranding {
@@ -433,6 +465,11 @@ export interface MonthlyReport {
   cost: number;
   profit: number;
   discount_total: number;
+  /** devoluções do mês e valores líquidos (já descontadas) */
+  refunds_total: number;
+  refunds_count: number;
+  net_revenue: number;
+  net_profit: number;
   margin_percent: number;
   average_ticket: number;
   best_day: number | null;

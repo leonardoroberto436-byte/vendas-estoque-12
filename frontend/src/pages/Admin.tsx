@@ -121,7 +121,7 @@ export default function Admin() {
   });
 
   const canSubmit =
-    form.name.trim().length >= 2 && form.email.includes("@") && form.password.length >= 8;
+    form.name.trim().length >= 2 && form.email.includes("@") && form.password.length >= 10;
 
   return (
     <AppShell>
@@ -290,7 +290,7 @@ export default function Admin() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="u-password">Senha provisória (mín. 8 caracteres)</Label>
+              <Label htmlFor="u-password">Senha provisória (mín. 10 caracteres, letras e números)</Label>
               <Input
                 id="u-password"
                 type="text"
@@ -350,7 +350,7 @@ export default function Admin() {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-1.5">
-            <Label htmlFor="u-newpass">Nova senha (mín. 8 caracteres)</Label>
+            <Label htmlFor="u-newpass">Nova senha (mín. 10 caracteres, letras e números)</Label>
             <Input
               id="u-newpass"
               type="text"
@@ -367,7 +367,7 @@ export default function Admin() {
               onClick={() =>
                 resetting && resetPassword.mutate({ id: resetting.id, password: newPassword })
               }
-              disabled={newPassword.length < 8 || resetPassword.isPending}
+              disabled={newPassword.length < 10 || resetPassword.isPending}
               data-testid="user-reset-confirm-btn"
             >
               {resetPassword.isPending ? "Salvando…" : "Redefinir"}

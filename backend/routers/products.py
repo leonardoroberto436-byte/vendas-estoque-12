@@ -5,6 +5,7 @@ Every query goes through `scoped(principal, ...)`, so a lookup by id is always
 therefore useless: the row simply does not exist for this caller (404).
 """
 
+import re
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -34,9 +35,12 @@ async def list_products(
 ):
     extra: dict = {}
     if search:
+        # literal search: characters like "(" or "+" in a part code must match as
+        # typed, and a crafted pattern must not be able to stall the database
+        pattern = re.escape(search.strip()[:80])
         extra["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"sku": {"$regex": search, "$options": "i"}},
+            {"name": {"$regex": pattern, "$options": "i"}},
+            {"sku": {"$regex": pattern, "$options": "i"}},
         ]
     if category and category != "TODAS":
         extra["category"] = category

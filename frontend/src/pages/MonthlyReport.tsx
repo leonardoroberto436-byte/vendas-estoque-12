@@ -144,8 +144,16 @@ export default function MonthlyReportPage() {
 
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           {[
-            { label: "Faturamento", value: report ? money(report.revenue) : "—", testId: "report-kpi-revenue" },
-            { label: "Lucro", value: report ? money(report.profit) : "—", testId: "report-kpi-profit" },
+            {
+              label: "Faturamento líquido",
+              value: report ? money(report.net_revenue ?? report.revenue) : "—",
+              testId: "report-kpi-revenue",
+            },
+            {
+              label: "Lucro líquido",
+              value: report ? money(report.net_profit ?? report.profit) : "—",
+              testId: "report-kpi-profit",
+            },
             {
               label: "Vendas",
               value: report ? String(report.sales_count) : "—",
@@ -178,12 +186,20 @@ export default function MonthlyReportPage() {
             <CardTitle className="text-base font-bold tracking-tight">Resumo do mês</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-4">
               {[
+                { label: "Faturamento bruto", value: report ? money(report.revenue) : "—" },
+                {
+                  label: "Devoluções",
+                  value: report
+                    ? `${money(report.refunds_total ?? 0)} (${report.refunds_count ?? 0})`
+                    : "—",
+                  testId: "report-refunds",
+                },
                 { label: "Itens vendidos", value: report ? String(report.items_sold) : "—" },
                 { label: "Custo das vendas", value: report ? money(report.cost) : "—" },
                 { label: "Descontos", value: report ? money(report.discount_total) : "—" },
-                { label: "Margem", value: report ? `${report.margin_percent}%` : "—", testId: "report-margin" },
+                { label: "Margem líquida", value: report ? `${report.margin_percent}%` : "—", testId: "report-margin" },
                 {
                   label: "Melhor dia",
                   value: report?.best_day ? `Dia ${report.best_day}` : "—",

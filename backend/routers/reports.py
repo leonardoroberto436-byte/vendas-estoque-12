@@ -86,6 +86,16 @@ async def monthly_report(
     discount = round(sum(float(s.get("discount", 0)) for s in sales), 2)
     items_sold = sum(int(i["quantity"]) for s in sales for i in s.get("items", []))
 
+    # Devoluções registradas no mês: o dinheiro devolvido sai do faturamento e,
+    # como a mercadoria volta, o custo dela também sai do custo das vendas.
+    returns = await db.returns.find(
+        scoped(principal, {"created_at": {"$gte": start, "$lt": end}})
+    ).to_list(20000)
+    refunds = round(sum(float(r.get("refund_total", 0)) for r in returns), 2)
+    refunded_cost = round(sum(float(r.get("cost_total", 0)) for r in returns), 2)
+    net_revenue = round(revenue - refunds, 2)
+    net_profit = round(profit - (refunds - refunded_cost), 2)
+
     daily = {day: {"revenue": 0.0, "profit": 0.0, "sales_count": 0} for day in range(1, days_in_month + 1)}
     payments: dict[str, dict] = {}
     tally: dict[str, dict] = {}
@@ -123,7 +133,11 @@ async def monthly_report(
         cost=cost,
         profit=profit,
         discount_total=discount,
-        margin_percent=round((profit / revenue * 100) if revenue else 0, 1),
+        refunds_total=refunds,
+        refunds_count=len(returns),
+        net_revenue=net_revenue,
+        net_profit=net_profit,
+        margin_percent=round((net_profit / net_revenue * 100) if net_revenue > 0 else 0, 1),
         average_ticket=round(revenue / len(sales), 2) if sales else 0.0,
         best_day=best_day[0] if best_day and best_day[1]["revenue"] > 0 else None,
         best_day_revenue=round(best_day[1]["revenue"], 2) if best_day else 0.0,
@@ -195,11 +209,15 @@ async def monthly_report_xlsx(
     ws["A1"].font = title_font
     ws["A2"] = f"Emitido em {report.generated_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
     rows = [
-        ("Faturamento", report.revenue, money),
+        ("Faturamento bruto", report.revenue, money),
+        ("Devoluções", report.refunds_total, money),
+        ("Faturamento líquido", report.net_revenue, money),
         ("Custo das vendas", report.cost, money),
-        ("Lucro", report.profit, money),
-        ("Margem (%)", report.margin_percent, "0.0"),
+        ("Lucro bruto", report.profit, money),
+        ("Lucro líquido", report.net_profit, money),
+        ("Margem líquida (%)", report.margin_percent, "0.0"),
         ("Descontos concedidos", report.discount_total, money),
+        ("Devoluções registradas", report.refunds_count, "0"),
         ("Vendas realizadas", report.sales_count, "0"),
         ("Itens vendidos", report.items_sold, "0"),
         ("Ticket médio", report.average_ticket, money),

@@ -55,11 +55,20 @@ async def create_movement(
             ),
         )
 
+    guard: dict = {"id": payload.product_id}
+    if delta < 0:
+        # concurrency guard: a sale landing at the same moment cannot push stock below zero
+        guard["current_stock"] = {"$gte": -delta}
     updated = await db.products.find_one_and_update(
-        scoped(principal, {"id": payload.product_id}),
+        scoped(principal, guard),
         {"$inc": {"current_stock": delta}, "$set": {"updated_at": datetime.now(timezone.utc)}},
         return_document=True,
     )
+    if not updated:
+        raise HTTPException(
+            status_code=409,
+            detail=f"O estoque de {product['name']} mudou agora há pouco. Atualize e tente de novo.",
+        )
 
     movement = StockMovement(
         org_id=principal.org_id,

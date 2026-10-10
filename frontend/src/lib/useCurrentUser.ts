@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { ApiError, apiGet } from "@/lib/api";
 import type { SessionUser } from "@/lib/types";
+import { errorMessage } from "@/lib/format";
 
 /** Who am I — answered by the backend from the httpOnly session cookie. */
 export function useCurrentUser() {
@@ -29,7 +30,8 @@ export function useCurrentUser() {
     organization: query.data?.organization ?? null,
     blockedMessage:
       query.error instanceof ApiError && query.error.status === 403
-        ? "Seu acesso está desativado. Fale com o administrador."
+        ? // o servidor explica o motivo (teste encerrado, empresa suspensa, acesso desativado...)
+          errorMessage(query.error, "Seu acesso está desativado. Fale com o administrador.")
         : null,
   };
 }

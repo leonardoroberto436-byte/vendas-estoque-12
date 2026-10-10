@@ -69,6 +69,8 @@ async def create_user(payload: UserCreate, principal: Principal = Depends(_manag
     # email is globally unique: one login belongs to exactly one company
     if await db.users.find_one({"email": email}):
         raise HTTPException(status_code=409, detail="Já existe um usuário com este e-mail.")
+    # same rule as every other password change (10+ chars, letters and numbers)
+    validate_new_password(payload.password)
 
     user = User(
         name=payload.name.strip(),

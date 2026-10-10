@@ -8,7 +8,7 @@ crons:
     method: POST
     enabled: true
   - name: backup-diario
-    description: "Backup completo do banco (mongodump), mantém os 7 mais recentes"
+    description: "Backup completo do banco (sem sessões), mantém os 7 mais recentes e envia cópia externa se configurada"
     cron: "0 6 * * *"
     timezone: "America/Sao_Paulo"
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.

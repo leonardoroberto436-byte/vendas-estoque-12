@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends, Query
 
 from lib.auth import Principal, require_org, scoped
 from lib.db import db
+from routers.settings import low_stock_alerts_enabled
 from models.inventory import (
     DashboardStats,
     LowStockItem,
@@ -78,6 +79,8 @@ async def dashboard_stats(
         if p["current_stock"] <= p["min_stock"]
     ]
     low.sort(key=lambda i: (i.current_stock, i.name))
+    if not await low_stock_alerts_enabled(principal.org_id):
+        low = []  # a empresa desligou os alertas de estoque
 
     inventory_value = round(
         sum(float(p["cost_price"]) * int(p["current_stock"]) for p in products), 2

@@ -49,11 +49,31 @@ Extras da mesma rodada:
 - Rotas de exemplo `/api/status` removidas.
 - Suítes: `backend/tests/test_tenant_isolation.py` (50 testes) e `backend/audit_dynamic.py` (66 testes dinâmicos, cria e apaga duas empresas fictícias).
 
-## Backups automáticos e auditoria do proprietário
-- `lib/backups.py`: `run_backup()` roda `mongodump`, empacota em `/app/backups/auto-<ts>.tar.gz` e mantém os **7 mais recentes** (`BACKUP_KEEP`). Cada execução é registrada na coleção `backups` (OK/FALHOU + tamanho).
+## Backups automáticos e auditoria do proprietário (revisado em 10/10/2026)
+- `lib/backups.py`: `run_backup()` lê o banco pelo **motor** (sem `mongodump`, funciona no Atlas de produção), grava `/app/backups/auto-<ts>.tar.gz` com um `<coleção>.jsonl` (Extended JSON) por coleção + `manifest.json`, e mantém os **7 mais recentes** (`BACKUP_KEEP`). **`sessions` e `password_resets` nunca entram no backup.** Compressão e upload rodam em `asyncio.to_thread` — não travam o servidor.
+- **Cópia externa (opcional)**: se `BACKUP_S3_BUCKET`, `BACKUP_S3_ACCESS_KEY_ID` e `BACKUP_S3_SECRET_ACCESS_KEY` existirem (+ `BACKUP_S3_ENDPOINT` p/ R2/B2, `BACKUP_S3_REGION`, `BACKUP_S3_PREFIX`), cada backup também sobe para o bucket via boto3. Campo `offsite` no registro: `ENVIADO` / `FALHOU` / `NAO_CONFIGURADO`. `GET /api/platform/backups/settings` → `{offsite_configured, keep}`; o painel mostra aviso amarelo quando não está ligado.
+- **Restauração**: `lib/restore.py` (`read_archive` lê jsonl-v1 e também os .bson antigos do mongodump; `select_org`; `write` = upsert por `id`). Painel: `POST /api/platform/backups/{arquivo}/restore` `{org_id, confirm}` — `confirm=false` só mostra contagens; `confirm=true` faz backup de segurança antes e regrava os registros da empresa (não apaga o que foi criado depois). Linha de comando: `python restore_backup.py ARQ.tar.gz --org ID [--yes]` ou `--all`.
 - Cron `.emergent/crons.yml` → `POST /api/cron/backup` (Bearer `WEBHOOK_CRON_SECRET`), **06:00 BRT diário**.
-- Painel: `POST /api/platform/backups/run` (manual), `GET /api/platform/backups`, `GET /api/platform/backups/{arquivo}/download` (nome saneado — traversal → 404). Guarda fora do servidor = o dono baixa o .tar.gz.
-- Trilha de auditoria: `log_platform_action()` grava em `platform_logs` toda ação do dono — `EMPRESA_CRIADA`, `EMPRESA_EDITADA`, `SENHA_ADMIN_REDEFINIDA`, `STATUS_<novo>`, `PLANO_ALTERADO`, `PRECOS_ALTERADOS`, `BACKUP_MANUAL`. Lida em `GET /api/platform/logs` e exibida no painel. Todas as rotas são **PLATFORM_OWNER only** (403 para empresa, 401 anônimo).
+- Painel: `POST /api/platform/backups/run`, `GET /api/platform/backups`, `GET /api/platform/backups/{arquivo}/download` (nome saneado — traversal → 404).
+- **Exportação pela loja**: `GET /api/settings/export.xlsx` (só ADMIN, só a própria empresa) — produtos, vendas, itens, devoluções, movimentações. Botão em `/empresa`.
+- Trilha de auditoria: `log_platform_action()` → `platform_logs`: `EMPRESA_CRIADA`, `EMPRESA_EDITADA`, `EMPRESA_EXCLUIDA`, `EMPRESA_RESTAURADA`, `USUARIO_EXCLUIDO`, `SENHA_ADMIN_REDEFINIDA`, `STATUS_<novo>`, `PLANO_ALTERADO`, `PRECOS_ALTERADOS`, `BACKUP_MANUAL`, `INADIMPLENTE_AUTOMATICO` (ator `sistema`). Todas as rotas são **PLATFORM_OWNER only**.
+
+## Remoção de contas pelo dono (10/10/2026)
+- `DELETE /api/platform/organizations/{id}` body `{confirm_name}` (nome exato) e `POST /api/platform/organizations/bulk-delete` `{ids, confirm:"EXCLUIR"}`: backup de segurança primeiro (se falhar, nada é apagado), depois apaga empresa + users + sessions + password_resets + products + sales + returns + stock_movements + access_logs.
+- `DELETE /api/platform/users/{id}`: nunca o PLATFORM_OWNER; recusa o último ADMIN ativo da empresa (aí exclui-se a empresa).
+- UI `/plataforma`: checkbox por linha, "Selecionar sem uso" (0 vendas, 0 produtos, assinatura ≠ ATIVO), "Excluir selecionadas", lixeira por empresa e por usuário.
+
+## Assinatura automática (10/10/2026)
+- `lib/auth.trial_expired(org)`: `subscription_status == TESTE` e `trial_ends_at` no passado → login e toda requisição da empresa dão **403** com `TRIAL_OVER_MESSAGE`. O dono libera mudando para plano pago + `ATIVO`, ou prorroga: com assinatura `TESTE`, a data salva em "Vencimento" (`PUT /plan` `due_date`) vira o novo `trial_ends_at` (23:59 UTC). `trial_expired` aparece em `OrgSummary`/`PlatformOrgView`.
+- `lib/subscriptions.mark_overdue()` (roda no cron diário de avisos): `ATIVO` com vencimento passado → `INADIMPLENTE` (não suspende — o dono decide).
+
+## Outras regras revisadas (10/10/2026)
+- **Devolução**: reembolso = preço unitário × (total/subtotal da venda) — respeita o desconto e nunca passa do valor pago. Reserva atômica em `sales.returned_qty.<product_id>` impede duas devoluções simultâneas de passar do vendido (409).
+- **Relatório mensal**: novos campos `refunds_total`, `refunds_count`, `net_revenue`, `net_profit`; margem calculada sobre o líquido; KPIs da tela e o Excel mostram bruto, devoluções e líquido.
+- **Ajuste manual de estoque**: baixa com guarda `current_stock >= quantidade` (409 se mudou).
+- **Alertas de estoque**: `organizations.alerts.low_stock_enabled` (padrão true). `GET/PUT /api/settings/alerts` (PUT só ADMIN). Desligado → dashboard devolve `low_stock_count=0`/lista vazia e a tela `/alertas` mostra o aviso.
+- **IP do cliente** (`lib/throttle.client_ip`): usa a entrada do `X-Forwarded-For` adicionada pelo proxy confiável (`TRUSTED_PROXY_HOPS`, padrão 1 = última), não a primeira (que o cliente forja). Vale para o limite de tentativas e para o log de acesso.
+- Busca de produtos usa `re.escape` (sem regex do usuário). Cadastro, criação de usuário e trocas de senha passam por `validate_new_password` (mín. 10, letras + números).
 
 ## Marca da empresa (cupom e relatório)
 `organizations.branding` = `{trade_name, cnpj, phone, address, logo}` (logo = data URL PNG/JPG, máx. 300 KB). `GET /api/settings/branding` (qualquer membro — o PDV precisa) · `PUT /api/settings/branding` (**só ADMIN**). Editado em `/empresa`, aplicado no cupom do PDV (tela, impressão 80mm e texto do WhatsApp) e no cabeçalho de impressão do relatório mensal.

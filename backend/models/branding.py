@@ -18,6 +18,12 @@ class OrgBranding(BaseModel):
     logo: Optional[str] = None
 
 
+class AlertSettings(BaseModel):
+    """Liga/desliga dos alertas de estoque baixo/zerado da empresa."""
+
+    low_stock_enabled: bool = True
+
+
 class OrgBrandingUpdate(BaseModel):
     trade_name: str = Field(default="", max_length=120)
     cnpj: str = Field(default="", max_length=24)

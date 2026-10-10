@@ -31,6 +31,19 @@ def aware(doc: dict) -> dict:
     return doc
 
 
+def paid_ratio(sale: dict) -> float:
+    """Fraction of the list price the customer actually paid on this sale.
+
+    A sale of R$ 100 with R$ 20 of discount has ratio 0.8, so returning the whole
+    sale refunds R$ 80 — never more than the customer paid.
+    """
+    subtotal = float(sale.get("subtotal") or 0)
+    if subtotal <= 0:
+        return 1.0
+    total = float(sale.get("total", subtotal))
+    return max(0.0, min(1.0, total / subtotal))
+
+
 async def _returned_quantities(principal: Principal, sale_id: str) -> dict[str, int]:
     """How much of each product of this sale was already given back."""
     docs = await db.returns.find(scoped(principal, {"sale_id": sale_id})).to_list(500)
@@ -71,7 +84,8 @@ async def returnable_sales(limit: int = 50, principal: Principal = Depends(requi
                     sold_quantity=int(item["quantity"]),
                     returned_quantity=already,
                     returnable_quantity=max(0, remaining),
-                    unit_price=float(item["unit_price"]),
+                    # what the customer actually paid per unit (discount applied)
+                    unit_price=round(float(item["unit_price"]) * paid_ratio(sale), 2),
                 )
             )
         if any(i.returnable_quantity > 0 for i in items):
@@ -100,6 +114,7 @@ async def create_return(
 
     sold = {i["product_id"]: i for i in sale.get("items", [])}
     already = await _returned_quantities(principal, sale["id"])
+    ratio = paid_ratio(sale)
 
     wanted: dict[str, int] = {}
     for item in payload.items:
@@ -119,19 +134,54 @@ async def create_return(
                     f"disponível para devolver {remaining}"
                 ),
             )
+        # refund what the customer paid, i.e. the list price minus the sale discount
+        paid_unit = round(float(line["unit_price"]) * ratio, 2)
         return_items.append(
             ReturnItem(
                 product_id=pid,
                 product_name=line["product_name"],
                 sku=line["sku"],
                 quantity=qty,
-                unit_price=float(line["unit_price"]),
+                unit_price=paid_unit,
                 unit_cost=float(line["unit_cost"]),
-                line_total=round(float(line["unit_price"]) * qty, 2),
+                line_total=round(paid_unit * qty, 2),
             )
         )
 
+    # Reserve the quantities atomically on the sale itself, so two returns sent at
+    # the same moment can never give back more units than were sold.
+    await db.sales.update_one(
+        scoped(principal, {"id": sale["id"], "returned_qty": {"$exists": False}}),
+        {"$set": {"returned_qty": already}},
+    )
+    reserved: list[tuple[str, int]] = []
+    try:
+        for pid, qty in wanted.items():
+            limit = int(sold[pid]["quantity"]) - qty
+            result = await db.sales.update_one(
+                scoped(
+                    principal,
+                    {"id": sale["id"], f"returned_qty.{pid}": {"$not": {"$gt": limit}}},
+                ),
+                {"$inc": {f"returned_qty.{pid}": qty}},
+            )
+            if result.modified_count != 1:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Outra devolução desta venda acabou de ser registrada. Atualize e tente de novo.",
+                )
+            reserved.append((pid, qty))
+    except Exception:
+        for pid, qty in reserved:  # undo the reservation
+            await db.sales.update_one(
+                scoped(principal, {"id": sale["id"]}), {"$inc": {f"returned_qty.{pid}": -qty}}
+            )
+        raise
+
     refund_total = round(sum(i.line_total for i in return_items), 2)
+    # never refund more than what is left of the amount the customer paid
+    still_refundable = round(float(sale.get("total", 0)) - float(sale.get("returned_total", 0)), 2)
+    refund_total = max(0.0, min(refund_total, still_refundable))
     cost_total = round(sum(i.unit_cost * i.quantity for i in return_items), 2)
     created = datetime.now(timezone.utc)
 

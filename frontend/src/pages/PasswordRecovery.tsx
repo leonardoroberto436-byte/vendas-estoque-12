@@ -141,7 +141,7 @@ export function ResetPassword() {
         onSubmit={(event) => {
           event.preventDefault();
           setError("");
-          if (password.length < 8) return setError("A senha precisa ter pelo menos 8 caracteres.");
+          if (password.length < 10) return setError("A senha precisa ter pelo menos 10 caracteres, com letras e números.");
           if (password !== confirm) return setError("A confirmação não confere.");
           reset.mutate();
         }}

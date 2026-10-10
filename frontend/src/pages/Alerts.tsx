@@ -1,16 +1,40 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, PackagePlus } from "lucide-react";
-import { apiGet } from "@/lib/api";
-import type { Product } from "@/lib/types";
-import { money, stockStatus } from "@/lib/format";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, BellOff, PackagePlus } from "lucide-react";
+import { toast } from "sonner";
+import { apiGet, apiPut } from "@/lib/api";
+import type { AlertSettings, Product } from "@/lib/types";
+import { errorMessage, money, stockStatus } from "@/lib/format";
+import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
 import MovementDialog from "@/components/MovementDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
 
 export default function Alerts() {
   const [restockId, setRestockId] = useState<string | null>(null);
+  const { isAdmin } = useCurrentUser();
+  const queryClient = useQueryClient();
+
+  const { data: settings } = useQuery({
+    queryKey: ["alert-settings"],
+    queryFn: () => apiGet<AlertSettings>("/settings/alerts"),
+    refetchOnWindowFocus: false,
+  });
+  const alertsOn = settings?.low_stock_enabled ?? true;
+
+  const toggleAlerts = useMutation({
+    mutationFn: (enabled: boolean) =>
+      apiPut<AlertSettings>("/settings/alerts", { low_stock_enabled: enabled }),
+    onSuccess: (result) => {
+      queryClient.setQueryData(["alert-settings"], result);
+      // o contador do menu e o painel inicial usam os mesmos números
+      void queryClient.invalidateQueries({ queryKey: ["dashboard-stats"] });
+      toast.success(result.low_stock_enabled ? "Alertas de estoque ligados" : "Alertas de estoque desligados");
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível mudar os alertas")),
+  });
 
   const { data, isError } = useQuery({
     queryKey: ["products"],
@@ -18,18 +42,55 @@ export default function Alerts() {
     refetchOnWindowFocus: false,
   });
   const products = isError ? [] : (data ?? []);
-  const alerts = products
-    .filter((product) => product.current_stock <= product.min_stock)
-    .sort((a, b) => a.current_stock - b.current_stock);
+  const alerts = alertsOn
+    ? products
+        .filter((product) => product.current_stock <= product.min_stock)
+        .sort((a, b) => a.current_stock - b.current_stock)
+    : [];
 
   return (
     <AppShell>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight text-slate-900">Alertas de Reposição</h1>
-        <p className="mt-1 text-sm font-medium text-slate-500">
-          Produtos no limite ou abaixo do estoque mínimo definido
-        </p>
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-900">Alertas de Reposição</h1>
+          <p className="mt-1 text-sm font-medium text-slate-500">
+            Produtos no limite ou abaixo do estoque mínimo definido
+          </p>
+        </div>
+        {isAdmin && (
+          <label
+            className="flex cursor-pointer items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm shadow-xs"
+            data-testid="alerts-toggle"
+          >
+            <Checkbox
+              checked={alertsOn}
+              disabled={toggleAlerts.isPending}
+              onCheckedChange={(checked) => toggleAlerts.mutate(checked === true)}
+              aria-label="Ligar ou desligar os alertas de estoque"
+              data-testid="alerts-toggle-checkbox"
+            />
+            <span>
+              <span className="block font-semibold text-slate-900">
+                {alertsOn ? "Alertas ligados" : "Alertas desligados"}
+              </span>
+              <span className="block text-xs text-slate-500">
+                Avisar quando o estoque chegar ao mínimo ou acabar
+              </span>
+            </span>
+          </label>
+        )}
       </div>
+
+      {!alertsOn && (
+        <Card className="mb-4 border-slate-200 bg-slate-50 shadow-xs" data-testid="alerts-off-notice">
+          <CardContent className="flex items-center gap-3 p-5 text-sm text-slate-600">
+            <BellOff className="size-5 shrink-0 text-slate-400" />
+            {isAdmin
+              ? "Os alertas de estoque estão desligados. Marque a caixa acima para voltar a receber os avisos."
+              : "Os alertas de estoque foram desligados pelo administrador da loja."}
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="alerts-list">
         {alerts.map((product) => {
@@ -82,7 +143,7 @@ export default function Alerts() {
             </Card>
           );
         })}
-        {alerts.length === 0 && (
+        {alertsOn && alerts.length === 0 && (
           <Card className="col-span-full border-emerald-200 bg-emerald-50/50 shadow-xs">
             <CardContent className="p-8 text-center text-sm font-medium text-emerald-800">
               Nenhum produto abaixo do estoque mínimo. Tudo em ordem.

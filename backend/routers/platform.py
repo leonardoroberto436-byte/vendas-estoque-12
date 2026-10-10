@@ -7,6 +7,7 @@ PLATFORM_OWNER has. A customer's ADMIN has `users:manage` but NOT
 This is also the only module allowed to read across organizations.
 """
 
+import asyncio
 import logging
 import secrets
 from datetime import datetime, timedelta, timezone
@@ -16,8 +17,14 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from fastapi.responses import FileResponse
 
-from lib.auth import ROLE_ADMIN, Principal, hash_password, require
-from lib.backups import backup_path, log_platform_action, run_backup
+from lib.auth import ROLE_ADMIN, Principal, hash_password, require, trial_expired
+from lib.backups import (
+    KEEP_BACKUPS,
+    backup_path,
+    log_platform_action,
+    offsite_configured,
+    run_backup,
+)
 from lib.db import db
 from lib.email import send_org_approved
 from lib.subscriptions import (
@@ -27,9 +34,16 @@ from lib.subscriptions import (
     run_due_reminders,
     set_plan_prices,
 )
+from lib.restore import read_archive, select_org, write as restore_write
 from models.org import (
     DEFAULT_PLAN_PRICES,
     BackupRecord,
+    BackupSettings,
+    DeleteResult,
+    OrgBulkDeleteRequest,
+    OrgDeleteRequest,
+    RestoreOrgRequest,
+    RestoreResult,
     PlatformLog,
     PLAN_LABELS,
     TRIAL_DAYS,
@@ -83,6 +97,7 @@ async def _to_view(org: dict) -> PlatformOrgView:
         subscription_status=org["subscription_status"],
         trial_ends_at=trial_ends,
         trial_days_left=days_left,
+        trial_expired=trial_expired(org),
         due_date=_aware(org.get("due_date")),
         days_to_due=days_until(org.get("due_date")),
         owner_name=org.get("owner_name", ""),
@@ -385,6 +400,10 @@ async def set_org_plan(
             raise HTTPException(status_code=400, detail="Data de vencimento inválida.")
         # a new due date starts a fresh reminder cycle
         changes["reminders_sent"] = []
+        if payload.subscription_status == "TESTE":
+            # na fase de teste a data informada é o novo fim do teste grátis —
+            # é assim que o dono prorroga um teste que já terminou
+            changes["trial_ends_at"] = changes["due_date"].replace(hour=23, minute=59)
     await db.organizations.update_one({"id": org_id}, {"$set": changes})
     await log_platform_action(
         actor_email=principal.email,
@@ -506,10 +525,17 @@ async def list_backups(limit: int = 30):
             size_bytes=d.get("size_bytes", 0),
             status=d.get("status", ""),
             error=d.get("error", ""),
+            offsite=d.get("offsite", ""),
             created_at=_aware(d["created_at"]),
         )
         for d in docs
     ]
+
+
+@router.get("/backups/settings", response_model=BackupSettings)
+async def backup_settings():
+    """Se a cópia externa (fora do servidor) está ligada — o painel avisa quando não está."""
+    return BackupSettings(offsite_configured=offsite_configured(), keep=KEEP_BACKUPS)
 
 
 @router.post("/backups/run", response_model=BackupRecord)
@@ -531,6 +557,7 @@ async def create_backup(principal: Principal = Depends(_owner)):
         size_bytes=doc.get("size_bytes", 0),
         status=doc.get("status", ""),
         error=doc.get("error", ""),
+        offsite=doc.get("offsite", ""),
         created_at=_aware(doc["created_at"]),
     )
 
@@ -543,3 +570,192 @@ async def download_backup(file_name: str):
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado")
     return FileResponse(path, media_type="application/gzip", filename=path.name)
+
+
+@router.post("/backups/{file_name}/restore", response_model=RestoreResult)
+async def restore_org_from_backup(
+    file_name: str, payload: RestoreOrgRequest, principal: Principal = Depends(_owner)
+):
+    """Devolve os dados de UMA empresa como estavam no backup escolhido.
+
+    Com confirm=false só mostra o que seria restaurado. Com confirm=true faz antes
+    um backup do estado atual (para poder voltar atrás) e então regrava os
+    registros da empresa que estão no backup. Registros criados depois do backup
+    não são apagados.
+    """
+    try:
+        path = backup_path(file_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado")
+
+    try:
+        data = await asyncio.to_thread(read_archive, path)
+    except Exception as exc:  # noqa: BLE001 — arquivo corrompido/formato inesperado
+        logger.error("Leitura do backup %s falhou: %s", file_name, exc)
+        raise HTTPException(status_code=400, detail="Não foi possível ler este arquivo de backup.")
+
+    plan = select_org(data, payload.org_id)
+    if not plan["organizations"]:
+        raise HTTPException(status_code=404, detail="Esta empresa não existe neste backup.")
+    org_name = plan["organizations"][0].get("name", "")
+    counts = {name: len(docs) for name, docs in plan.items()}
+
+    if not payload.confirm:
+        return RestoreResult(
+            org_id=payload.org_id,
+            org_name=org_name,
+            file=path.name,
+            counts=counts,
+            applied=False,
+            message="Simulação: confira os números e confirme para restaurar.",
+        )
+
+    safety = await run_backup()
+    if safety.get("status") != "OK":
+        raise HTTPException(
+            status_code=500,
+            detail="O backup de segurança antes da restauração falhou — nada foi alterado.",
+        )
+    await restore_write(plan)
+    await log_platform_action(
+        actor_email=principal.email,
+        action="EMPRESA_RESTAURADA",
+        target=org_name,
+        details=f"do backup {path.name} · segurança {safety.get('file', '')}",
+    )
+    return RestoreResult(
+        org_id=payload.org_id,
+        org_name=org_name,
+        file=path.name,
+        counts=counts,
+        applied=True,
+        safety_backup=safety.get("file", ""),
+        message="Dados da empresa restaurados. Um backup do estado anterior foi guardado.",
+    )
+
+
+# ------------------------------------------------------- remoção de contas
+# Tudo o que pertence a uma empresa pelo campo org_id.
+_ORG_DATA = ("products", "sales", "returns", "stock_movements", "access_logs")
+
+
+async def _purge_org(org: dict) -> tuple[int, int]:
+    """Apaga a empresa e TUDO dela. Devolve (usuários apagados, outros registros apagados)."""
+    org_id = org["id"]
+    members = await db.users.find({"org_id": org_id}, {"id": 1}).to_list(5000)
+    member_ids = [m["id"] for m in members]
+    if member_ids:
+        await db.sessions.delete_many({"user_id": {"$in": member_ids}})
+        await db.password_resets.delete_many({"user_id": {"$in": member_ids}})
+    users = (await db.users.delete_many({"org_id": org_id})).deleted_count
+    records = 0
+    for name in _ORG_DATA:
+        records += (await db[name].delete_many({"org_id": org_id})).deleted_count
+    await db.organizations.delete_one({"id": org_id})
+    return users, records
+
+
+async def _safety_backup() -> str:
+    safety = await run_backup()
+    if safety.get("status") != "OK":
+        raise HTTPException(
+            status_code=500,
+            detail="O backup de segurança antes da exclusão falhou — nada foi apagado.",
+        )
+    return safety.get("file", "")
+
+
+@router.delete("/organizations/{org_id}", response_model=DeleteResult)
+async def delete_organization(
+    org_id: str, payload: OrgDeleteRequest, principal: Principal = Depends(_owner)
+):
+    """Remove uma empresa (ex.: conta de teste) com todos os dados dela.
+
+    Exige digitar o nome da empresa. Antes de apagar é feito um backup, então dá
+    para trazer a empresa de volta pela restauração de backup.
+    """
+    org = await db.organizations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    if payload.confirm_name.strip() != org.get("name", "").strip():
+        raise HTTPException(
+            status_code=400, detail="O nome digitado não confere com o nome da empresa."
+        )
+
+    safety = await _safety_backup()
+    users, records = await _purge_org(org)
+    await log_platform_action(
+        actor_email=principal.email,
+        action="EMPRESA_EXCLUIDA",
+        target=org.get("name", ""),
+        details=f"{users} usuário(s) · {records} registro(s) · backup {safety}",
+    )
+    return DeleteResult(
+        deleted_orgs=1,
+        deleted_users=users,
+        deleted_records=records,
+        safety_backup=safety,
+        message=f"Empresa {org.get('name', '')} removida. Backup de segurança: {safety}.",
+    )
+
+
+@router.post("/organizations/bulk-delete", response_model=DeleteResult)
+async def bulk_delete_organizations(
+    payload: OrgBulkDeleteRequest, principal: Principal = Depends(_owner)
+):
+    """Remove várias empresas de uma vez — para limpar as contas de teste."""
+    if payload.confirm.strip().upper() != "EXCLUIR":
+        raise HTTPException(status_code=400, detail='Digite EXCLUIR para confirmar.')
+
+    orgs = await db.organizations.find({"id": {"$in": list(set(payload.ids))}}).to_list(500)
+    if not orgs:
+        raise HTTPException(status_code=404, detail="Nenhuma das empresas foi encontrada.")
+
+    safety = await _safety_backup()
+    total_users = total_records = 0
+    for org in orgs:
+        users, records = await _purge_org(org)
+        total_users += users
+        total_records += records
+        await log_platform_action(
+            actor_email=principal.email,
+            action="EMPRESA_EXCLUIDA",
+            target=org.get("name", ""),
+            details=f"exclusão em lote · {users} usuário(s) · {records} registro(s) · backup {safety}",
+        )
+    return DeleteResult(
+        deleted_orgs=len(orgs),
+        deleted_users=total_users,
+        deleted_records=total_records,
+        safety_backup=safety,
+        message=f"{len(orgs)} empresa(s) removida(s). Backup de segurança: {safety}.",
+    )
+
+
+@router.delete("/users/{user_id}", status_code=204)
+async def delete_platform_user(user_id: str, principal: Principal = Depends(_owner)):
+    """Remove um usuário solto (ex.: login de teste) sem mexer no resto da empresa."""
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuário não encontrado")
+    if user.get("role") == "PLATFORM_OWNER":
+        raise HTTPException(status_code=400, detail="A conta do dono da plataforma não pode ser removida.")
+    if user.get("role") == ROLE_ADMIN and user.get("org_id"):
+        others = await db.users.count_documents(
+            {"org_id": user["org_id"], "role": ROLE_ADMIN, "is_active": True, "id": {"$ne": user_id}}
+        )
+        if others == 0:
+            raise HTTPException(
+                status_code=400,
+                detail="Este é o único administrador da empresa. Para remover, exclua a empresa inteira.",
+            )
+    await db.sessions.delete_many({"user_id": user_id})
+    await db.password_resets.delete_many({"user_id": user_id})
+    await db.users.delete_one({"id": user_id})
+    await log_platform_action(
+        actor_email=principal.email,
+        action="USUARIO_EXCLUIDO",
+        target=user.get("email", ""),
+        details=f"papel {user.get('role')}",
+    )
+    return None

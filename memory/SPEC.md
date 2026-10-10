@@ -172,6 +172,6 @@ Regras de segurança: um admin não pode se auto-rebaixar/excluir, e o sistema s
 - Teste grátis de **7 dias** (`TRIAL_DAYS`); e-mails automáticos 3 dias e 1 dia antes de acabar (`run_billing_daily`).
 - Cadastro instantâneo: a empresa nasce APROVADA em TESTE e o usuário já entra logado (sem aprovação do dono).
 - `/` mostra a **página de vendas** (`pages/Landing.tsx`) para visitantes; logado vai para o painel. Preços/limites vêm de `GET /api/public/plans` (público). Imagens em `frontend/public/landing/`.
-- Nome da marca e WhatsApp do suporte centralizados em `frontend/src/lib/brand.ts`; botão flutuante `components/WhatsAppButton.tsx` (app e página de vendas; escondido no caixa).
+- Marca: **Estoque Pro** (10/10/2026). Nome da marca e WhatsApp do suporte centralizados em `frontend/src/lib/brand.ts`; botão flutuante `components/WhatsAppButton.tsx` (app e página de vendas; escondido no caixa).
 - **Código de barras** opcional no produto (`barcode`, único por empresa quando preenchido). No caixa, o campo de busca já vem focado: o leitor digita o código + Enter e o produto entra no carrinho (busca exata por código de barras ou SKU).
 - **Importar planilha**: `GET /api/products/import/template.xlsx`, `POST /api/products/import?dry_run=true|false` (.xlsx/.csv, cabeçalhos flexíveis, números no formato brasileiro, upsert por SKU, respeita limite do plano, até 5.000 linhas). Testes: `tests/test_import_barcode.py`.

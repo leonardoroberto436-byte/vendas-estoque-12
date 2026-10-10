@@ -12,6 +12,7 @@ from fastapi.responses import StreamingResponse
 from lib.auth import Principal, require_org, scoped
 
 from lib.db import db
+from lib.email import EMAIL_FROM_NAME
 from lib.plans import history_months, plan_allows
 from models.inventory import (
     MonthlyReport,
@@ -231,7 +232,7 @@ async def monthly_report_xlsx(
     # --- Resumo
     ws = wb.active
     ws.title = "Resumo"
-    ws["A1"] = f"Estoque & Vendas Pro — Fechamento {report.label}"
+    ws["A1"] = f"{EMAIL_FROM_NAME} — Fechamento {report.label}"
     ws["A1"].font = title_font
     ws["A2"] = f"Emitido em {report.generated_at.astimezone(BR_TZ).strftime('%d/%m/%Y %H:%M')}"
     rows = [

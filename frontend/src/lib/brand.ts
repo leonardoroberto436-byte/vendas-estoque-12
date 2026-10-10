@@ -1,6 +1,6 @@
 // Nome e contato da marca num lugar só — para trocar o nome, mude aqui
 // (e o <title> em index.html, e EMAIL_FROM_NAME nos Secrets do Emergent).
-export const BRAND_NAME = "Estoque & Vendas Pro";
+export const BRAND_NAME = "Estoque Pro";
 
 // Suporte pelo WhatsApp: DDI + DDD + número, só dígitos.
 export const WHATSAPP_NUMBER = "5519991629460";

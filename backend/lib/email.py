@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 # in the deployed app.
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
-EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Estoque & Vendas Pro")
+# nome da marca (mude aqui ou pela variável EMAIL_FROM_NAME)
+EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Estoque Pro")
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
 
 

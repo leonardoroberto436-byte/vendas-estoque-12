@@ -11,6 +11,8 @@ import os
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from lib.email import EMAIL_FROM_NAME
+
 router = APIRouter(prefix="/legal", tags=["legal"])
 
 # Mude a versão sempre que o texto dos termos mudar: o aceite fica gravado com ela.
@@ -27,7 +29,7 @@ class LegalInfo(BaseModel):
 
 
 def legal_info() -> LegalInfo:
-    product = os.environ.get("EMAIL_FROM_NAME", "Estoque & Vendas Pro")
+    product = EMAIL_FROM_NAME
     return LegalInfo(
         product_name=product,
         company_name=os.environ.get("LEGAL_COMPANY_NAME", "").strip() or product,

@@ -24,7 +24,10 @@ API_BASE = os.environ.get("MP_API_BASE", "https://api.mercadopago.com").rstrip("
 
 
 def access_token() -> str:
-    return os.environ.get("MP_ACCESS_TOKEN", "").strip()
+    """Só vale um token de verdade (TEST-… ou APP_USR-…). Um valor provisório
+    como "PREENCHER" conta como "não configurado" em vez de quebrar a cobrança."""
+    token = os.environ.get("MP_ACCESS_TOKEN", "").strip()
+    return token if token.startswith(("TEST-", "APP_USR-")) else ""
 
 
 def webhook_secret() -> str:

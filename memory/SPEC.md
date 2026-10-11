@@ -176,3 +176,9 @@ Regras de segurança: um admin não pode se auto-rebaixar/excluir, e o sistema s
 - **Código de barras** opcional no produto (`barcode`, único por empresa quando preenchido). No caixa, o campo de busca já vem focado: o leitor digita o código + Enter e o produto entra no carrinho (busca exata por código de barras ou SKU).
 - **Assinatura com cartão no próprio site** (sem conta Mercado Pago): `MP_PUBLIC_KEY` liga o formulário oficial (Card Payment Brick); o servidor cria a preapproval com `card_token_id` e status authorized e ativa na hora. O checkout do MP continua como alternativa. Erros comuns do MP aparecem em português.
 - **Importar planilha**: `GET /api/products/import/template.xlsx`, `POST /api/products/import?dry_run=true|false` (.xlsx/.csv, cabeçalhos flexíveis, números no formato brasileiro, upsert por SKU, respeita limite do plano, até 5.000 linhas). Testes: `tests/test_import_barcode.py`.
+
+## Ideias para depois (combinadas com o dono, ainda não feitas)
+- Pix mensal + Pix anual com desconto na assinatura; formulário de cartão só com crédito.
+- Etiquetas de código de barras para imprimir (peças sem etiqueta).
+- Fotos dos produtos: redimensionar no envio (WebP ~800px + miniatura), guardar fora do banco (R2/S3), carregar sob demanda; talvez só nos planos Profissional/Avançado.
+- Módulo para desmanches (lista de peças por veículo).

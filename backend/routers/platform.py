@@ -10,16 +10,19 @@ This is also the only module allowed to read across organizations.
 import asyncio
 import logging
 import secrets
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from fastapi.responses import FileResponse
 
 from lib.auth import ROLE_ADMIN, Principal, hash_password, require, trial_expired
 from lib.billing import billing_block, run_billing_daily
 from lib.backups import (
+    BACKUP_DIR,
     KEEP_BACKUPS,
     backup_path,
     log_platform_action,
@@ -852,3 +855,119 @@ async def delete_platform_user(user_id: str, principal: Principal = Depends(_own
         details=f"papel {user.get('role')}",
     )
     return None
+
+
+# ------------------------------------------------- mudança de servidor
+# Usado para levar os dados para um servidor novo: o dono envia o arquivo de
+# backup baixado do servidor antigo e restaura o banco inteiro.
+MAX_UPLOAD_BYTES = 50 * 1024 * 1024  # arquivo comprimido
+MAX_UNPACKED_BYTES = 500 * 1024 * 1024  # proteção contra "bomba" de compressão
+# coleções que não fazem sentido trazer de outro servidor
+_FULL_RESTORE_SKIP = frozenset({"backups", "status_checks"})
+
+
+class FullRestoreRequest(BaseModel):
+    confirm: bool = False
+
+
+def _validate_archive(path) -> None:
+    import tarfile
+
+    total = 0
+    with tarfile.open(path, "r:gz") as tar:
+        members = tar.getmembers()
+        if not members:
+            raise ValueError("arquivo vazio")
+        for m in members:
+            if m.isdir():
+                continue
+            if not m.isfile():
+                raise ValueError("tipo de item não permitido")
+            name = m.name.rsplit("/", 1)[-1]
+            if not name.endswith((".jsonl", ".json", ".bson")):
+                raise ValueError("arquivo não permitido no backup")
+            total += m.size
+            if total > MAX_UNPACKED_BYTES:
+                raise ValueError("backup grande demais")
+
+
+@router.post("/backups/upload", response_model=BackupRecord)
+async def upload_backup(file: UploadFile = File(...), principal: Principal = Depends(_owner)):
+    content = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(content) > MAX_UPLOAD_BYTES:
+        raise HTTPException(status_code=413, detail="Arquivo grande demais (máximo 50 MB).")
+    if not content.startswith(b"\x1f\x8b"):
+        raise HTTPException(status_code=400, detail="Envie o arquivo .tar.gz baixado do painel.")
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    path = BACKUP_DIR / f"enviado-{stamp}.tar.gz"
+    path.write_bytes(content)
+    try:
+        await asyncio.to_thread(_validate_archive, path)
+        data = await asyncio.to_thread(read_archive, path)
+        if not data.get("organizations") and not data.get("users"):
+            raise ValueError("backup sem empresas nem usuários")
+    except Exception as exc:  # noqa: BLE001
+        path.unlink(missing_ok=True)
+        logger.warning("Backup enviado recusado: %s", exc)
+        raise HTTPException(status_code=400, detail="Este arquivo não é um backup válido do sistema.")
+    doc = {
+        "id": str(uuid.uuid4()),
+        "file": path.name,
+        "size_bytes": len(content),
+        "status": "OK",
+        "error": "",
+        "offsite": "ENVIADO_PELO_DONO",
+        "created_at": datetime.now(timezone.utc),
+    }
+    await db.backups.insert_one(dict(doc))
+    await log_platform_action(
+        actor_email=principal.email, action="BACKUP_ENVIADO", target=path.name, details=f"{len(content)} bytes"
+    )
+    return BackupRecord(**doc)
+
+
+@router.post("/backups/{file_name}/restore-all", response_model=RestoreResult)
+async def restore_everything(
+    file_name: str, payload: FullRestoreRequest, principal: Principal = Depends(_owner)
+):
+    """Restaura o banco INTEIRO a partir do backup (mudança de servidor).
+
+    confirm=false só mostra os números. confirm=true faz antes um backup do
+    estado atual. Contas com o mesmo e-mail são substituídas pela versão do
+    backup (inclusive a do dono, que volta com a senha antiga)."""
+    try:
+        path = backup_path(file_name)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Arquivo de backup não encontrado")
+    try:
+        data = await asyncio.to_thread(read_archive, path)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("Leitura do backup %s falhou: %s", file_name, exc)
+        raise HTTPException(status_code=400, detail="Não foi possível ler este arquivo de backup.")
+    plan = {k: v for k, v in data.items() if k not in _FULL_RESTORE_SKIP}
+    counts = {name: len(docs) for name, docs in plan.items()}
+    if not payload.confirm:
+        return RestoreResult(
+            org_id="*", org_name="Banco inteiro", file=path.name, counts=counts, applied=False,
+            message="Simulação: confira os números e confirme para restaurar tudo.",
+        )
+    safety = await run_backup()
+    if safety.get("status") != "OK":
+        raise HTTPException(status_code=500, detail="O backup de segurança falhou — nada foi alterado.")
+    # e-mail é único: remove a conta local que tem o mesmo e-mail e outro id
+    for user in plan.get("users", []):
+        email = (user.get("email") or "").lower()
+        if email and user.get("id"):
+            await db.users.delete_many({"email": email, "id": {"$ne": user["id"]}})
+    await restore_write(plan)
+    await db.sessions.delete_many({})  # todos entram de novo, com as senhas do backup
+    await log_platform_action(
+        actor_email=principal.email, action="BANCO_RESTAURADO", target=path.name,
+        details=f"segurança {safety.get('file', '')}",
+    )
+    return RestoreResult(
+        org_id="*", org_name="Banco inteiro", file=path.name, counts=counts, applied=True,
+        safety_backup=safety.get("file", ""),
+        message="Banco restaurado. Entre de novo com a senha que você usava no servidor antigo.",
+    )

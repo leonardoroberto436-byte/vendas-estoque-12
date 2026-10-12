@@ -24,6 +24,11 @@ logger = logging.getLogger(__name__)
 # in the deployed app.
 EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
+# Brevo (fora do Emergent). Com BREVO_API_KEY preenchida, o envio vai pelo Brevo.
+# EMAIL_FROM_ADDRESS precisa ser um remetente verificado no painel do Brevo.
+BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+BREVO_URL = "https://api.brevo.com/v3/smtp/email"
+EMAIL_FROM_ADDRESS = os.environ.get("EMAIL_FROM_ADDRESS", "").strip()
 # nome da marca (mude aqui ou pela variável EMAIL_FROM_NAME)
 EMAIL_FROM_NAME = os.environ.get("EMAIL_FROM_NAME", "Estoque Pro")
 EMAIL_REPLY_TO = os.environ.get("EMAIL_REPLY_TO")
@@ -128,6 +133,8 @@ def _assert_safe_email(subject: str, html: str) -> None:
 # ----------------------------------------------------------------------- sender
 async def send_email(*, to: str, subject: str, html: str, reply_to: str | None = None) -> str | None:
     _assert_safe_email(subject, html)  # G2-G3 gate — never skip
+    if BREVO_API_KEY:
+        return await _send_brevo(to=to, subject=subject, html=html, reply_to=reply_to or EMAIL_REPLY_TO)
     if not EMAIL_KEY:
         logger.warning("EMERGENT_EMAIL_KEY ausente — e-mail não enviado para %s", to)
         return None
@@ -156,6 +163,38 @@ async def send_email(*, to: str, subject: str, html: str, reply_to: str | None =
         raise HTTPException(status_code=502, detail="Falha ao enviar o e-mail")
     except Exception as e:  # noqa: BLE001
         logger.error("Email send error: %s", str(e))
+        raise HTTPException(status_code=500, detail="Falha ao enviar o e-mail")
+
+
+async def _send_brevo(*, to: str, subject: str, html: str, reply_to: str | None) -> str | None:
+    if not EMAIL_FROM_ADDRESS:
+        logger.warning("EMAIL_FROM_ADDRESS ausente — e-mail não enviado para %s", to)
+        return None
+    payload: dict = {
+        "sender": {"name": EMAIL_FROM_NAME, "email": EMAIL_FROM_ADDRESS},
+        "to": [{"email": to}],
+        "subject": subject,
+        "htmlContent": html,
+    }
+    if reply_to:
+        payload["replyTo"] = {"email": reply_to}
+    try:
+        async with httpx.AsyncClient(timeout=30) as client:
+            resp = await client.post(
+                BREVO_URL,
+                headers={"api-key": BREVO_API_KEY, "accept": "application/json"},
+                json=payload,
+            )
+        resp.raise_for_status()
+        return resp.json().get("messageId")
+    except httpx.HTTPStatusError as e:
+        # nunca registra a chave; só o status e a mensagem do provedor
+        logger.error("Brevo recusou o envio: %s %s", e.response.status_code, e.response.text[:300])
+        if e.response.status_code in (402, 429):
+            raise HTTPException(status_code=503, detail="E-mail temporariamente indisponível")
+        raise HTTPException(status_code=502, detail="Falha ao enviar o e-mail")
+    except Exception as e:  # noqa: BLE001
+        logger.error("Brevo erro: %s", type(e).__name__)
         raise HTTPException(status_code=500, detail="Falha ao enviar o e-mail")
 
 

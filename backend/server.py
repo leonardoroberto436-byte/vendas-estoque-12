@@ -106,6 +106,25 @@ async def health():
     # a hospedagem consulta /health para saber se o servidor está de pé
     return {"status": "ok"}
 
+# Só aceita /api vindo do nosso proxy (Cloudflare Pages). Quem tentar chamar o
+# servidor direto (ex.: xxx.onrender.com/api) recebe 403 — isso impede burlar o
+# limite de tentativas falsificando o IP. Sem PROXY_SHARED_SECRET, fica desligado.
+import hmac  # noqa: E402
+
+from starlette.responses import JSONResponse  # noqa: E402
+
+_PROXY_SECRET = os.environ.get("PROXY_SHARED_SECRET", "").strip()
+
+
+@app.middleware("http")
+async def require_proxy_secret(request, call_next):
+    if _PROXY_SECRET and request.url.path.startswith("/api"):
+        got = request.headers.get("x-proxy-secret", "")
+        if not hmac.compare_digest(got.encode(), _PROXY_SECRET.encode()):
+            return JSONResponse({"detail": "Acesso negado"}, status_code=403)
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,

@@ -24,7 +24,7 @@ import {
   Users,
 } from "lucide-react";
 import { toast } from "sonner";
-import { apiDelete, apiGet, apiPost, apiPut } from "@/lib/api";
+import { apiDelete, apiGet, apiPost, apiPut, apiUpload } from "@/lib/api";
 import type {
   OrgCredentials,
   BackupRecord,
@@ -94,6 +94,7 @@ const OFFSITE_LABELS: Record<string, string> = {
   ENVIADO: "cópia externa ok",
   FALHOU: "cópia externa falhou",
   NAO_CONFIGURADO: "só no servidor",
+  ENVIADO_PELO_DONO: "enviado por você",
 };
 
 const PLANS: Plan[] = ["TESTE", "INICIAL", "PROFISSIONAL", "AVANCADO"];
@@ -364,6 +365,32 @@ export default function Platform() {
       void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
     },
     onError: (error) => toast.error(errorMessage(error, "Não foi possível gerar o backup")),
+  });
+
+  // mudança de servidor: enviar o backup do servidor antigo e restaurar tudo
+  const [fullRestore, setFullRestore] = useState<RestoreResult | null>(null);
+  const uploadBackup = useMutation({
+    mutationFn: (file: File) => apiUpload<BackupRecord>("/platform/backups/upload", file),
+    onSuccess: (result) => {
+      toast.success(`Backup recebido: ${result.file}`);
+      void queryClient.invalidateQueries({ queryKey: ["platform-backups"] });
+      void queryClient.invalidateQueries({ queryKey: ["platform-logs"] });
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível enviar o backup")),
+  });
+  const restoreAll = useMutation({
+    mutationFn: ({ file, confirm }: { file: string; confirm: boolean }) =>
+      apiPost<RestoreResult>(`/platform/backups/${file}/restore-all`, { confirm }),
+    onSuccess: (result) => {
+      if (result.applied) {
+        setFullRestore(null);
+        toast.success(result.message);
+        void endSession();
+      } else {
+        setFullRestore(result);
+      }
+    },
+    onError: (error) => toast.error(errorMessage(error, "Não foi possível restaurar")),
   });
 
   const sendReminders = useMutation({
@@ -1199,6 +1226,61 @@ export default function Platform() {
                 {backupSettings?.keep ?? 7} mais recentes no servidor. Antes de excluir ou restaurar
                 uma empresa, um backup novo é feito sozinho.
               </p>
+              <div className="mb-3 rounded-lg border border-white/10 bg-slate-800/60 p-3 text-xs text-slate-300">
+                <p className="mb-2 font-semibold text-white">Trouxe dados de outro servidor?</p>
+                <p className="mb-2">
+                  Envie o arquivo .tar.gz baixado do servidor antigo. Depois clique em “Restaurar tudo” na
+                  linha dele.
+                </p>
+                <input
+                  type="file"
+                  accept=".gz,application/gzip"
+                  data-testid="platform-backup-upload-input"
+                  disabled={uploadBackup.isPending}
+                  className="block w-full text-xs text-slate-300 file:mr-3 file:rounded-md file:border-0 file:bg-teal-600 file:px-3 file:py-1.5 file:text-xs file:font-semibold file:text-white"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadBackup.mutate(f);
+                    e.target.value = "";
+                  }}
+                />
+              </div>
+              {fullRestore && (
+                <div
+                  className="mb-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-100"
+                  data-testid="platform-full-restore-preview"
+                >
+                  <p className="mb-1 font-semibold">Restaurar o banco inteiro de {fullRestore.file}?</p>
+                  <p className="mb-2">
+                    {Object.entries(fullRestore.counts)
+                      .filter(([, n]) => n > 0)
+                      .map(([name, n]) => `${name}: ${n}`)
+                      .join(" · ")}
+                  </p>
+                  <p className="mb-2">
+                    Um backup do estado atual é feito antes. Todos precisarão entrar de novo, com as senhas
+                    do servidor antigo.
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      data-testid="platform-full-restore-confirm"
+                      disabled={restoreAll.isPending}
+                      onClick={() => restoreAll.mutate({ file: fullRestore.file, confirm: true })}
+                    >
+                      {restoreAll.isPending ? "Restaurando..." : "Confirmar e restaurar tudo"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="border-white/20 bg-transparent text-white hover:bg-white/10"
+                      onClick={() => setFullRestore(null)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              )}
               {backupSettings && !backupSettings.offsite_configured && (
                 <div
                   className="mb-3 flex gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200"
@@ -1262,6 +1344,18 @@ export default function Platform() {
                         <ArchiveRestore className="size-3.5" />
                         Restaurar
                       </button>
+                      {backup.file.startsWith("enviado-") && (
+                        <button
+                          type="button"
+                          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-amber-400/40 px-2 py-1 text-xs font-semibold text-amber-200 transition-colors duration-150 hover:bg-amber-400/10"
+                          data-testid={`platform-backup-restore-all-${backup.id}`}
+                          disabled={restoreAll.isPending}
+                          onClick={() => restoreAll.mutate({ file: backup.file, confirm: false })}
+                        >
+                          <ArchiveRestore className="size-3.5" />
+                          Restaurar tudo
+                        </button>
+                      )}
                       <a
                         href={`/api/platform/backups/${backup.file}/download`}
                         className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-white/20 px-2 py-1 text-xs font-semibold text-white transition-colors duration-150 hover:bg-white/10"

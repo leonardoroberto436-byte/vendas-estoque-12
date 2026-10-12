@@ -1,0 +1,83 @@
+# Servidor (back-end) do Estoque Pro no Render.
+# No painel do Render: New → Blueprint → escolha este repositório.
+# Valores marcados "sync: false" são SECRETOS: o Render pede para você colar
+# no painel. Eles nunca ficam no GitHub.
+services:
+  - type: web
+    name: estoque-pro-api
+    runtime: python
+    plan: free
+    region: virginia
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.2
+      - key: APP_TZ
+        value: America/Sao_Paulo
+      - key: DB_NAME
+        value: estoquepro
+      - key: APP_PUBLIC_URL
+        value: https://estoquevendaspro.com
+      - key: CORS_ORIGINS
+        value: https://estoquevendaspro.com
+      # Cloudflare (proxy) + Render = 2 saltos até o visitante
+      - key: TRUSTED_PROXY_HOPS
+        value: "2"
+      - key: BACKUP_DIR
+        value: /tmp/backups
+      - key: BACKUP_S3_BUCKET
+        value: backups-estoque-pro
+      - key: BACKUP_S3_REGION
+        value: auto
+      - key: EMAIL_FROM_NAME
+        value: Estoque Pro
+      - key: PAYMENT_GRACE_DAYS
+        value: "5"
+      - key: LOGIN_LIMIT_PER_5MIN
+        value: "8"
+      - key: SIGNUP_LIMIT_PER_HOUR
+        value: "5"
+      # ---- gerados pelo próprio Render (aleatórios e longos) ----
+      - key: PROXY_SHARED_SECRET
+        generateValue: true
+      - key: WEBHOOK_CRON_SECRET
+        generateValue: true
+      # ---- secretos: você cola no painel ----
+      - key: MONGO_URL
+        sync: false
+      - key: PLATFORM_OWNER_EMAIL
+        sync: false
+      - key: PLATFORM_OWNER_PASSWORD
+        sync: false
+      - key: PLATFORM_OWNER_NAME
+        sync: false
+      - key: BREVO_API_KEY
+        sync: false
+      - key: EMAIL_FROM_ADDRESS
+        sync: false
+      - key: EMAIL_REPLY_TO
+        sync: false
+      - key: BACKUP_S3_ENDPOINT
+        sync: false
+      - key: BACKUP_S3_ACCESS_KEY_ID
+        sync: false
+      - key: BACKUP_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: MP_ACCESS_TOKEN
+        sync: false
+      - key: MP_PUBLIC_KEY
+        sync: false
+      - key: MP_WEBHOOK_SECRET
+        sync: false
+      - key: LEGAL_COMPANY_NAME
+        sync: false
+      - key: LEGAL_DOCUMENT
+        sync: false
+      - key: LEGAL_CONTACT_EMAIL
+        sync: false
+      - key: LEGAL_CITY
+        sync: false

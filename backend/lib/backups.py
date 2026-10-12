@@ -22,6 +22,7 @@ import io
 import json
 import logging
 import os
+import re
 import tarfile
 import uuid
 from datetime import datetime, timezone
@@ -43,6 +44,11 @@ SKIP_COLLECTIONS = frozenset({"sessions", "password_resets"})
 S3_BUCKET = os.environ.get("BACKUP_S3_BUCKET", "").strip()
 S3_ENDPOINT = os.environ.get("BACKUP_S3_ENDPOINT", "").strip() or None
 S3_REGION = os.environ.get("BACKUP_S3_REGION", "auto").strip() or "auto"
+# Backblaze B2: a região vem no próprio endereço (s3.us-east-005.backblazeb2.com)
+if S3_REGION == "auto" and S3_ENDPOINT and "backblazeb2.com" in S3_ENDPOINT:
+    _m = re.search(r"s3\.([a-z0-9-]+)\.backblazeb2\.com", S3_ENDPOINT)
+    if _m:
+        S3_REGION = _m.group(1)
 S3_PREFIX = os.environ.get("BACKUP_S3_PREFIX", "vendas-estoque/").strip()
 S3_KEY_ID = os.environ.get("BACKUP_S3_ACCESS_KEY_ID", "").strip()
 S3_SECRET = os.environ.get("BACKUP_S3_SECRET_ACCESS_KEY", "").strip()

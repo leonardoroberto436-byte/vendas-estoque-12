@@ -7,7 +7,7 @@ O site atual (Emergent) continua no ar até o último passo. Nenhum cliente fica
 | Site + telas do sistema | Cloudflare Pages (pasta `frontend`) | `frontend/functions/api/[[path]].js`, `frontend/public/_headers` |
 | Servidor (API) | Render | `render.yaml` |
 | Banco de dados | MongoDB Atlas (grátis, M0) | — |
-| Cópia dos backups | Cloudflare R2 | ver `docs/BACKUP-EXTERNO.md` |
+| Cópia dos backups | Backblaze B2 | ver `docs/BACKUP-EXTERNO.md` |
 | E-mails | Brevo | — |
 | Backup diário e avisos de cobrança | GitHub Actions | `.github/workflows/tarefas-automaticas.yml` |
 
@@ -27,7 +27,7 @@ O site atual (Emergent) continua no ar até o último passo. Nenhum cliente fica
 4. **Restaurar os dados**: entrar no endereço `*.pages.dev` com o dono provisório → Plataforma → Backups → enviar o arquivo `.tar.gz` → "Restaurar tudo" → confirmar. Depois entrar com a senha antiga.
 5. **Testar** no `*.pages.dev`: login, venda, estoque, relatório, cadastro de teste, e-mail de recuperação de senha.
 6. **Brevo**: verificar o remetente (`EMAIL_FROM_ADDRESS`) e colar `BREVO_API_KEY` no Render.
-7. **R2**: criar bucket e chaves (ver `docs/BACKUP-EXTERNO.md`) e colar no Render.
+7. **Backblaze B2**: criar bucket e chaves (ver `docs/BACKUP-EXTERNO.md`) e colar no Render.
 8. **GitHub Actions**: criar os secrets `APP_URL` e `WEBHOOK_CRON_SECRET` (copiar do Render). Rodar uma vez à mão ("Run workflow").
 9. **Monitor grátis** (UptimeRobot, a cada 5 min, em `https://estoquevendaspro.com/api/public/plans`): avisa se cair e evita o servidor grátis "dormir".
 10. **Domínio**: apontar `estoquevendaspro.com` para o Cloudflare Pages. Só depois disso, atualizar o webhook do Mercado Pago (o endereço continua o mesmo, mas conferir que chega).

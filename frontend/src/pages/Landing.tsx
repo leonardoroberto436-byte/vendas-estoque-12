@@ -443,6 +443,11 @@ export default function Landing() {
               <Smartphone className="size-4" />
               WhatsApp {WHATSAPP_DISPLAY}
             </a>
+            <a href="/sistema-para-loja-de-autopecas.html" className="hover:text-slate-800">Autopeças</a>
+            <a href="/sistema-para-loja-de-cosmeticos.html" className="hover:text-slate-800">Cosméticos</a>
+            <a href="/sistema-para-loja-de-roupas.html" className="hover:text-slate-800">Roupas</a>
+            <a href="/calculadora-preco-de-venda.html" className="hover:text-slate-800">Calculadora de preço</a>
+            <a href="/blog.html" className="hover:text-slate-800">Blog</a>
             <Link to="/termos" className="hover:text-slate-800">Termos de Uso</Link>
             <Link to="/privacidade" className="hover:text-slate-800">Privacidade</Link>
             <Link to="/login" className="hover:text-slate-800">Entrar</Link>

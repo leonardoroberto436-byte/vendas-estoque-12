@@ -1,0 +1,40 @@
+:root{--p:#0f766e;--p2:#115e59;--t:#0f172a;--m:#475569;--b:#e2e8f0;--bg:#fff;--s:#f8fafc}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Plus Jakarta Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color:var(--t);background:var(--bg);line-height:1.7;font-size:17px}
+a{color:var(--p)}
+.in{max-width:780px;margin:0 auto;padding:0 16px}
+.topo{position:sticky;top:0;background:#ffffffee;backdrop-filter:blur(8px);border-bottom:1px solid var(--b);z-index:5}
+.topo .in{max-width:1100px;display:flex;align-items:center;justify-content:space-between;height:60px}
+.logo{display:flex;align-items:center;gap:8px;font-weight:800;color:var(--t);text-decoration:none}
+.logo span{display:inline-flex;width:32px;height:32px;border-radius:9px;background:var(--p);color:#fff;font-size:13px;align-items:center;justify-content:center}
+.topo nav{display:flex;align-items:center;gap:14px;font-size:15px}
+.topo nav a{text-decoration:none;color:var(--m);font-weight:600}
+.btn{display:inline-block;background:var(--p);color:#fff!important;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:12px;margin:6px 6px 0 0}
+.btn:hover{background:var(--p2)}
+.btn.sec{background:#fff;color:var(--t)!important;border:1px solid #cbd5e1}
+.btn.peq{padding:8px 14px;margin:0;font-size:14px}
+main{padding:24px 16px 56px}
+.trilha{font-size:14px;color:var(--m);margin-bottom:8px}
+h1{font-size:clamp(28px,5vw,38px);line-height:1.2;margin:8px 0 18px}
+h2{font-size:24px;line-height:1.3;margin:36px 0 10px}
+h3{font-size:19px;margin:24px 0 6px}
+p,li{color:#1e293b}
+table{width:100%;border-collapse:collapse;margin:16px 0;font-size:15px;display:block;overflow-x:auto}
+th,td{border:1px solid var(--b);padding:8px 10px;text-align:left}
+th{background:var(--s)}
+.cta{margin:40px 0;padding:24px;border-radius:18px;background:#f0fdfa;border:1px solid #99f6e4}
+.cta h2{margin-top:0}
+.rel ul,.lista{padding-left:0;list-style:none}
+.rel li{margin:8px 0}
+.lista li{border:1px solid var(--b);border-radius:14px;margin:12px 0}
+.lista a{display:block;padding:16px 18px;text-decoration:none}
+.lista strong{display:block;color:var(--t)}
+.lista span{color:var(--m);font-size:15px}
+.rodape{border-top:1px solid var(--b);background:var(--s);font-size:14px;color:var(--m);padding:20px 0}
+.calc{display:grid;gap:14px;background:var(--s);border:1px solid var(--b);border-radius:18px;padding:20px;margin:20px 0}
+.calc label{display:grid;gap:4px;font-weight:600;font-size:15px}
+.calc input{font:inherit;padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;width:100%}
+.res{background:#fff;border:2px solid var(--p);border-radius:14px;padding:16px}
+.res b{font-size:28px;color:var(--p)}
+.aviso{color:#b91c1c;font-weight:600}
+@media (max-width:520px){.topo nav a:not(.btn){display:none}}

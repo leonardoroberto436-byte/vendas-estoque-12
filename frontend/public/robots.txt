@@ -1,0 +1,18 @@
+User-agent: *
+Disallow: /api/
+Disallow: /vender
+Disallow: /vendas
+Disallow: /devolucoes
+Disallow: /produtos
+Disallow: /estoque
+Disallow: /alertas
+Disallow: /relatorio
+Disallow: /perfil
+Disallow: /empresa
+Disallow: /assinatura
+Disallow: /admin
+Disallow: /plataforma
+Disallow: /redefinir-senha
+Disallow: /esqueci-senha
+
+Sitemap: https://estoquevendaspro.com/sitemap.xml

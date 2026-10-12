@@ -2,7 +2,7 @@
 // Para ligar: troque o valor vazio abaixo pelo ID da propriedade (ex.: "G-ABC123XYZ").
 // Vazio = nada é carregado.
 (function () {
-  var GA_ID = "";
+  var GA_ID = "G-WGV41RG2TZ";
   if (!GA_ID) return;
   var s = document.createElement("script");
   s.async = true;

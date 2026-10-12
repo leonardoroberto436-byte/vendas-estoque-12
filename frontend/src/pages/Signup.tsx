@@ -36,6 +36,8 @@ export default function Signup() {
     onSuccess: async (data) => {
       // a conta já nasce liberada e logada: vai direto para o sistema
       setDone(data);
+      // GA4: conta o cadastro de teste como conversão (sem dados pessoais)
+      (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.("event", "sign_up", { method: "teste_gratis" });
       await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
       navigate("/", { replace: true });
     },

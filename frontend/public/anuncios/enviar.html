@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>Enviando artes</title><body style="font:16px system-ui;padding:20px">Enviando artes para o Gerenciador de Anúncios…<script>
+(async()=>{const nomes=["anuncio-A-feed.jpg","anuncio-B-feed.jpg"];const out=[];
+for(const n of nomes){const b=await (await fetch(n)).blob();out.push({n,b:await new Promise(r=>{const f=new FileReader();f.onload=()=>r(f.result);f.readAsDataURL(b)})});}
+if(window.opener){window.opener.postMessage({tipo:"ep-artes",artes:out},"https://adsmanager.facebook.com");document.body.textContent="Pronto. Pode fechar esta aba.";}
+else document.body.textContent="Sem janela de origem.";})();
+</script>

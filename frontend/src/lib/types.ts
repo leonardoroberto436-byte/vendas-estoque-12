@@ -105,6 +105,7 @@ export interface OrgBranding {
 export interface PlatformOrgView extends OrgSummary {
   owner_name: string;
   owner_email: string;
+  owner_whatsapp?: string;
   created_at: string;
   approved_at: string | null;
   suspended_at: string | null;

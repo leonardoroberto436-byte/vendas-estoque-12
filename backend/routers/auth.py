@@ -148,11 +148,16 @@ async def signup(payload: SignupRequest, request: Request, response: Response):
         "terms_accepted_ip": client_ip(request),
     }
 
+    whatsapp = "".join(ch for ch in (payload.whatsapp or "") if ch.isdigit())
+    if whatsapp and not 10 <= len(whatsapp) <= 13:
+        raise HTTPException(status_code=400, detail="WhatsApp inválido. Use DDD + número, ex.: (19) 99999-9999.")
+
     now = datetime.now(timezone.utc)
     org = Organization(
         name=payload.company_name.strip(),
         owner_name=payload.name.strip(),
         owner_email=email,
+        owner_whatsapp=whatsapp,
         status="APROVADA",
         plan="TESTE",
         subscription_status="TESTE",

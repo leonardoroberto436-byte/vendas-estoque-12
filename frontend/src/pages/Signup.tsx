@@ -16,6 +16,7 @@ export default function Signup() {
   const [name, setName] = useState("");
   const [company, setCompany] = useState("");
   const [email, setEmail] = useState("");
+  const [whatsapp, setWhatsapp] = useState("");
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [accepted, setAccepted] = useState(false);
@@ -30,6 +31,7 @@ export default function Signup() {
         name: name.trim(),
         company_name: company.trim(),
         email: email.trim(),
+        whatsapp: whatsapp.replace(/\D/g, ""),
         password,
         accept_terms: accepted,
       }),
@@ -38,6 +40,8 @@ export default function Signup() {
       setDone(data);
       // GA4: conta o cadastro de teste como conversão (sem dados pessoais)
       (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.("event", "sign_up", { method: "teste_gratis" });
+      // Pixel da Meta: conta o cadastro (sem dados pessoais)
+      (window as unknown as { fbq?: (...a: unknown[]) => void }).fbq?.("track", "CompleteRegistration");
       await queryClient.invalidateQueries({ queryKey: ["auth-me"] });
       navigate("/", { replace: true });
     },
@@ -50,6 +54,9 @@ export default function Signup() {
     if (name.trim().length < 2) return setError("Informe seu nome completo.");
     if (company.trim().length < 2) return setError("Informe o nome da empresa.");
     if (!email.includes("@")) return setError("Informe um e-mail válido.");
+    const waDigits = whatsapp.replace(/\D/g, "");
+    if (waDigits && (waDigits.length < 10 || waDigits.length > 13))
+      return setError("WhatsApp inválido. Use DDD + número, ex.: (19) 99999-9999.");
     if (password.length < 10) return setError("A senha precisa ter pelo menos 10 caracteres, com letras e números.");
     if (password !== confirm) return setError("A confirmação não confere com a senha.");
     if (!accepted) return setError("Para criar a conta, aceite os Termos de Uso e a Política de Privacidade.");
@@ -144,6 +151,23 @@ export default function Signup() {
                     data-testid="signup-email-input"
                   />
                 </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="su-whatsapp">
+                  WhatsApp <span className="font-normal text-slate-400">(opcional)</span>
+                </Label>
+                <Input
+                  id="su-whatsapp"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  value={whatsapp}
+                  onChange={(e) => setWhatsapp(e.target.value)}
+                  placeholder="(19) 99999-9999"
+                  maxLength={20}
+                  data-testid="signup-whatsapp-input"
+                />
+                <p className="text-xs text-slate-500">Para a gente te ajudar a começar. Não enviamos propaganda.</p>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">

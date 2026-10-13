@@ -867,6 +867,16 @@ export default function Platform() {
                         <p className="text-xs text-slate-400">
                           {org.owner_name} · {org.owner_email}
                         </p>
+                        {org.owner_whatsapp && (
+                          <a
+                            href={`https://wa.me/55${org.owner_whatsapp.replace(/^55(?=\d{10,11}$)/, "")}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs font-semibold text-emerald-400 hover:underline"
+                          >
+                            WhatsApp: {org.owner_whatsapp}
+                          </a>
+                        )}
                       </TableCell>
                       <TableCell>
                         <span

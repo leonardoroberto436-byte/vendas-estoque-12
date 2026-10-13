@@ -110,6 +110,7 @@ async def _to_view(org: dict) -> PlatformOrgView:
         days_to_due=days_until(org.get("due_date")),
         owner_name=org.get("owner_name", ""),
         owner_email=org.get("owner_email", ""),
+        owner_whatsapp=org.get("owner_whatsapp", "") or "",
         created_at=_aware(org["created_at"]),
         approved_at=_aware(org.get("approved_at")),
         suspended_at=_aware(org.get("suspended_at")),

@@ -159,7 +159,7 @@ export function PrivacyPage() {
 
       <h2>2. Dados que coletamos</h2>
       <ul>
-        <li>Cadastro: nome, e-mail, nome da empresa e senha (guardada de forma criptografada — nem nós conseguimos vê-la).</li>
+        <li>Cadastro: nome, e-mail, nome da empresa, WhatsApp (opcional, usado só para suporte no início do uso) e senha (guardada de forma criptografada — nem nós conseguimos vê-la).</li>
         <li>Dados da empresa que você informar: nome fantasia, CNPJ, telefone, endereço e logo.</li>
         <li>Registros de acesso: data, hora, endereço IP e navegador de cada login, guardados por segurança e por exigência do Marco Civil da Internet.</li>
         <li>Assinatura: plano, valores e situação dos pagamentos. Os dados do cartão são informados diretamente ao Mercado Pago — nós não recebemos nem guardamos o número do cartão.</li>
@@ -208,8 +208,11 @@ export function PrivacyPage() {
 
       <h2>8. Cookies</h2>
       <p>
-        Usamos apenas o cookie necessário para manter você conectado ao sistema. Não usamos cookies
-        de publicidade nem de rastreamento.
+        Usamos o cookie necessário para manter você conectado ao sistema. Com a sua autorização (aviso
+        exibido na primeira visita), também usamos cookies de medição do Google Analytics e do Pixel da
+        Meta, só para saber quantas pessoas visitam o site, de quais anúncios elas vêm e quantas criam
+        conta. Esses cookies não recebem o conteúdo da sua loja (produtos, vendas, clientes). Se você
+        recusar, nada disso é carregado. Para mudar a escolha, limpe os dados do site no seu navegador.
       </p>
 
       <h2>9. Contato</h2>

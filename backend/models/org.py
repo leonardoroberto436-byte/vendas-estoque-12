@@ -71,6 +71,8 @@ class Organization(BaseModel):
     name: str
     owner_name: str
     owner_email: str
+    # WhatsApp opcional informado no cadastro (só dígitos, com DDD)
+    owner_whatsapp: str = ""
     status: OrgStatus = "PENDENTE"
     plan: Plan = "TESTE"
     subscription_status: SubscriptionStatus = "TESTE"
@@ -90,6 +92,8 @@ class SignupRequest(BaseModel):
     company_name: str = Field(min_length=2, max_length=120)
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    # WhatsApp opcional para o suporte ajudar no teste grátis
+    whatsapp: str = Field(default="", max_length=24)
     # aceite dos Termos de Uso e da Política de Privacidade (obrigatório)
     accept_terms: bool = False
 
@@ -125,6 +129,7 @@ class PlatformOrgView(OrgSummary):
 
     owner_name: str
     owner_email: str
+    owner_whatsapp: str = ""
     created_at: datetime
     approved_at: Optional[datetime] = None
     suspended_at: Optional[datetime] = None

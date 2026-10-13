@@ -26,7 +26,28 @@ EMAIL_BASE_URL = "https://integrations.emergentagent.com"
 EMAIL_KEY = os.environ.get("EMERGENT_EMAIL_KEY", "")
 # Brevo (fora do Emergent). Com BREVO_API_KEY preenchida, o envio vai pelo Brevo.
 # EMAIL_FROM_ADDRESS precisa ser um remetente verificado no painel do Brevo.
-BREVO_API_KEY = os.environ.get("BREVO_API_KEY", "").strip()
+def _normalize_brevo_key(raw: str) -> str:
+    """Aceita a chave de API (xkeysib-...) ou a chave "API/MCP" do Brevo,
+    que vem em base64 com um JSON {"api_key": "xkeysib-..."} dentro."""
+    key = raw.strip().strip('"').strip("'")
+    if key.startswith("BREVO_API_KEY="):
+        key = key.split("=", 1)[1].strip()
+    if key and not key.startswith("xkeysib-"):
+        try:
+            import base64
+            import json
+
+            pad = "=" * (-len(key) % 4)
+            data = json.loads(base64.b64decode(key + pad, validate=False).decode("utf-8"))
+            inner = str(data.get("api_key", "")).strip()
+            if inner.startswith("xkeysib-"):
+                return inner
+        except Exception:  # noqa: BLE001
+            pass
+    return key
+
+
+BREVO_API_KEY = _normalize_brevo_key(os.environ.get("BREVO_API_KEY", ""))
 BREVO_URL = "https://api.brevo.com/v3/smtp/email"
 EMAIL_FROM_ADDRESS = os.environ.get("EMAIL_FROM_ADDRESS", "").strip()
 # nome da marca (mude aqui ou pela variável EMAIL_FROM_NAME)
@@ -190,6 +211,13 @@ async def _send_brevo(*, to: str, subject: str, html: str, reply_to: str | None)
     except httpx.HTTPStatusError as e:
         # nunca registra a chave; só o status e a mensagem do provedor
         logger.error("Brevo recusou o envio: %s %s", e.response.status_code, e.response.text[:300])
+        if e.response.status_code == 401:
+            # diagnóstico sem expor a chave: só o formato (prefixo público) e o tamanho
+            logger.error(
+                "Formato da BREVO_API_KEY: prefixo=%s tamanho=%d",
+                BREVO_API_KEY[:8] if BREVO_API_KEY.startswith("xk") else "outro",
+                len(BREVO_API_KEY),
+            )
         if e.response.status_code in (402, 429):
             raise HTTPException(status_code=503, detail="E-mail temporariamente indisponível")
         raise HTTPException(status_code=502, detail="Falha ao enviar o e-mail")

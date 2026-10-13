@@ -49,7 +49,7 @@ Cadastre o custo e o preço de venda, e veja a margem de cada item. É comum des
 
 Cadastre alguns produtos, passe o leitor, faça vendas de teste e acompanhe o estoque mudando sozinho. São 7 dias grátis, sem cartão de crédito.
 
-[Testar o Estoque Pro grátis por 7 dias](https://estoquevendaspro.com/cadastro)
+[Testar o Estoque Pro grátis por 7 dias](https://estoquevendaspro.com.br/cadastro)
 
 ## Cadastro rápido com planilha Excel
 
@@ -110,4 +110,4 @@ Não. O teste grátis de 7 dias não pede cartão.
 
 Menos produto faltando, mais clareza sobre o lucro e um caixa mais ágil. Comece o teste grátis do Estoque Pro e veja se combina com a rotina da sua loja.
 
-[Criar conta e testar grátis](https://estoquevendaspro.com/cadastro)
+[Criar conta e testar grátis](https://estoquevendaspro.com.br/cadastro)

@@ -104,7 +104,7 @@ Isso resolve a parte mais trabalhosa: o lucro bruto sobre os produtos. As despes
 
 Dica prática: use o lucro estimado do relatório como ponto de partida e subtraia o total de despesas do mês.
 
-[Ver o relatório do mês no Estoque Pro (7 dias grátis)](https://estoquevendaspro.com/cadastro)
+[Ver o relatório do mês no Estoque Pro (7 dias grátis)](https://estoquevendaspro.com.br/cadastro)
 
 ## Por que o lucro da loja costuma ser menor do que parece
 
@@ -176,4 +176,4 @@ Saber o lucro real da loja é o que separa quem trabalha muito de quem trabalha 
 
 Para facilitar a parte de vendas, lucro estimado e produtos mais vendidos, teste o Estoque Pro por 7 dias, grátis e sem cartão.
 
-[Criar minha conta e testar grátis](https://estoquevendaspro.com/cadastro)
+[Criar minha conta e testar grátis](https://estoquevendaspro.com.br/cadastro)

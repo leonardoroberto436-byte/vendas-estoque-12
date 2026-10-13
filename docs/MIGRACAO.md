@@ -29,6 +29,6 @@ O site atual (Emergent) continua no ar até o último passo. Nenhum cliente fica
 6. **Brevo**: verificar o remetente (`EMAIL_FROM_ADDRESS`) e colar `BREVO_API_KEY` no Render.
 7. **Backblaze B2**: criar bucket e chaves (ver `docs/BACKUP-EXTERNO.md`) e colar no Render.
 8. **GitHub Actions**: criar os secrets `APP_URL` e `WEBHOOK_CRON_SECRET` (copiar do Render). Rodar uma vez à mão ("Run workflow").
-9. **Monitor grátis** (UptimeRobot, a cada 5 min, em `https://estoquevendaspro.com/api/public/plans`): avisa se cair e evita o servidor grátis "dormir".
-10. **Domínio**: apontar `estoquevendaspro.com` para o Cloudflare Pages. Só depois disso, atualizar o webhook do Mercado Pago (o endereço continua o mesmo, mas conferir que chega).
+9. **Monitor grátis** (UptimeRobot, a cada 5 min, em `https://estoquevendaspro.com.br/api/public/plans`): avisa se cair e evita o servidor grátis "dormir".
+10. **Domínio**: apontar `estoquevendaspro.com.br` para o Cloudflare Pages. Só depois disso, atualizar o webhook do Mercado Pago (o endereço continua o mesmo, mas conferir que chega).
 11. Último backup no Emergent → enviar e restaurar de novo no servidor novo (pega o que mudou no meio-tempo) → desligar o Emergent.

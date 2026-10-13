@@ -21,9 +21,9 @@ services:
       - key: DB_NAME
         value: estoquepro
       - key: APP_PUBLIC_URL
-        value: https://estoquevendaspro.com
+        value: https://estoquevendaspro.com.br
       - key: CORS_ORIGINS
-        value: https://estoquevendaspro.com
+        value: https://estoquevendaspro.com.br
       # Cloudflare (proxy) + Render = 2 saltos até o visitante
       - key: TRUSTED_PROXY_HOPS
         value: "2"

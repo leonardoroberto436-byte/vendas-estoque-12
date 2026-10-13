@@ -119,7 +119,7 @@ O caixa do Estoque Pro foi pensado para lojas de balcão e funciona com leitor d
 
 Teste por 7 dias, sem cartão, com o leitor que você já tem.
 
-[Testar o caixa com leitor grátis](https://estoquevendaspro.com/cadastro)
+[Testar o caixa com leitor grátis](https://estoquevendaspro.com.br/cadastro)
 
 ## Leitor de código de barras e controle de estoque juntos
 
@@ -172,4 +172,4 @@ Usar leitor de código de barras no caixa deixa o atendimento mais rápido e red
 
 Experimente o caixa do Estoque Pro por 7 dias, grátis e sem cartão.
 
-[Criar minha conta e testar](https://estoquevendaspro.com/cadastro)
+[Criar minha conta e testar](https://estoquevendaspro.com.br/cadastro)

@@ -1,5 +1,5 @@
 // Cloudflare Pages Function: repassa /api/* para o servidor (Render).
-// Assim site e API ficam no MESMO endereço (estoquevendaspro.com) e o cookie de
+// Assim site e API ficam no MESMO endereço (estoquevendaspro.com.br) e o cookie de
 // login continua seguro (httpOnly, Secure, SameSite=Lax), sem abrir CORS.
 //
 // Variáveis no painel do Cloudflare Pages (Settings → Variables, tipo "Secret"):

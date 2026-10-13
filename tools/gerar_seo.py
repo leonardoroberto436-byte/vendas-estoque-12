@@ -17,7 +17,7 @@ import markdown
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "frontend" / "seo-content"
 OUT = ROOT / "frontend" / "public"
-SITE = "https://estoquevendaspro.com"
+SITE = "https://estoquevendaspro.com.br"
 BRAND = "Estoque Pro"
 WHATS = "https://wa.me/5519991629460?text=" + "Ol%C3%A1!%20Quero%20saber%20mais%20sobre%20o%20Estoque%20Pro."
 HOJE = datetime.date.today().isoformat()
@@ -144,7 +144,7 @@ def main():
     (OUT / "blog").mkdir(exist_ok=True)
     for meta, body in docs:
         corpo = markdown.markdown(body, extensions=["tables", "sane_lists"])
-        corpo = corpo.replace("https://estoquevendaspro.com/cadastro", "/cadastro")
+        corpo = corpo.replace("https://estoquevendaspro.com.br/cadastro", "/cadastro")
         destino = OUT / url_de(meta["slug"]).lstrip("/")
         destino.write_text(pagina(meta, corpo, faq(body), metas), encoding="utf-8")
 

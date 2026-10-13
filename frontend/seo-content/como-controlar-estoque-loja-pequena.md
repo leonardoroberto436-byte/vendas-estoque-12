@@ -80,7 +80,7 @@ O Estoque Pro faz esse trabalho com alerta de reposição e lista de compras a p
 
 Se você já está sentindo que o caderno ou a planilha não dão conta, vale testar um sistema simples, feito para lojas de balcão. O Estoque Pro tem teste grátis de 7 dias, sem cartão.
 
-[Testar o Estoque Pro grátis](https://estoquevendaspro.com/cadastro)
+[Testar o Estoque Pro grátis](https://estoquevendaspro.com.br/cadastro)
 
 ## Passo 6: organize o espaço físico
 
@@ -167,4 +167,4 @@ Controlar o estoque de uma loja pequena é uma rotina, não um evento. Com cadas
 
 Se quiser tirar parte desse trabalho das suas costas, experimente o Estoque Pro: caixa com leitor de código de barras, estoque que baixa sozinho, alerta de reposição e relatório do mês, tudo no navegador.
 
-[Começar o teste grátis de 7 dias, sem cartão](https://estoquevendaspro.com/cadastro)
+[Começar o teste grátis de 7 dias, sem cartão](https://estoquevendaspro.com.br/cadastro)

@@ -125,7 +125,7 @@ O importante é que, no conjunto, a loja tenha margem suficiente para pagar as d
 
 Calcular uma vez é fácil. Difícil é manter o controle de dezenas ou centenas de produtos. No Estoque Pro, você cadastra o custo e o preço de venda, e o sistema mostra a margem de lucro por produto. Assim, antes de fazer uma promoção, você enxerga até onde pode baixar o preço.
 
-[Ver a margem dos meus produtos no Estoque Pro (teste grátis)](https://estoquevendaspro.com/cadastro)
+[Ver a margem dos meus produtos no Estoque Pro (teste grátis)](https://estoquevendaspro.com.br/cadastro)
 
 O teste é grátis por 7 dias, sem cartão de crédito.
 
@@ -182,4 +182,4 @@ Saber calcular preço de venda e margem de lucro protege seu negócio de vender 
 
 Se quiser acompanhar a margem de cada produto sem fazer conta manualmente, experimente o Estoque Pro por 7 dias, grátis e sem cartão.
 
-[Começar meu teste grátis](https://estoquevendaspro.com/cadastro)
+[Começar meu teste grátis](https://estoquevendaspro.com.br/cadastro)

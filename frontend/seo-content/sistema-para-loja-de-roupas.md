@@ -49,7 +49,7 @@ Você vê a margem de cada peça a partir do custo e do preço de venda. Isso é
 
 Cadastre algumas peças, faça uma venda e uma devolução de teste e acompanhe o estoque. O teste dura 7 dias e não pede cartão de crédito.
 
-[Começar meu teste grátis](https://estoquevendaspro.com/cadastro)
+[Começar meu teste grátis](https://estoquevendaspro.com.br/cadastro)
 
 ## Importe seu cadastro de uma planilha Excel
 
@@ -110,4 +110,4 @@ Não. São 7 dias grátis, sem cartão de crédito.
 
 Menos conferência manual, mais clareza sobre o que vende e o que rende. Faça o teste do Estoque Pro e veja se ele facilita a rotina da sua loja.
 
-[Criar conta e testar grátis por 7 dias](https://estoquevendaspro.com/cadastro)
+[Criar conta e testar grátis por 7 dias](https://estoquevendaspro.com.br/cadastro)

@@ -15,4 +15,4 @@ Disallow: /plataforma
 Disallow: /redefinir-senha
 Disallow: /esqueci-senha
 
-Sitemap: https://estoquevendaspro.com/sitemap.xml
+Sitemap: https://estoquevendaspro.com.br/sitemap.xml

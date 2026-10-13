@@ -1,6 +1,6 @@
 # Tarefas automáticas do Estoque Pro (substituem os crons do Emergent).
 # Secrets do repositório (Settings → Secrets and variables → Actions):
-#   APP_URL             https://estoquevendaspro.com
+#   APP_URL             https://estoquevendaspro.com.br
 #   WEBHOOK_CRON_SECRET o mesmo valor do Render
 name: Tarefas automaticas
 

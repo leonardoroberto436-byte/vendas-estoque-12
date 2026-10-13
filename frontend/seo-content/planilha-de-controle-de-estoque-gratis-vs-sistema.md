@@ -117,7 +117,7 @@ Os planos do Estoque Pro custam R$69, R$129 e R$199 por mês. Só você sabe se 
 
 Se você já tem uma planilha, não precisa jogar nada fora. O Estoque Pro permite importar produtos por planilha Excel. Você organiza o arquivo, importa e já começa a vender com o cadastro pronto.
 
-[Testar o Estoque Pro grátis por 7 dias](https://estoquevendaspro.com/cadastro)
+[Testar o Estoque Pro grátis por 7 dias](https://estoquevendaspro.com.br/cadastro)
 
 ## Como fazer a transição sem dor de cabeça
 
@@ -163,4 +163,4 @@ A planilha é um bom ponto de partida, e não há problema nenhum em começar po
 
 Se você se reconheceu em vários sinais deste artigo, teste o Estoque Pro por 7 dias, sem cartão, e compare com o seu método atual.
 
-[Criar minha conta e testar grátis](https://estoquevendaspro.com/cadastro)
+[Criar minha conta e testar grátis](https://estoquevendaspro.com.br/cadastro)

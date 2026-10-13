@@ -53,7 +53,7 @@ Já tem sua lista de peças em uma planilha? Não precisa digitar tudo de novo. 
 
 Você pode cadastrar suas peças, fazer algumas vendas de teste e ver na prática como o estoque se movimenta. São 7 dias grátis, sem pedir cartão de crédito.
 
-[Quero testar grátis por 7 dias](https://estoquevendaspro.com/cadastro)
+[Quero testar grátis por 7 dias](https://estoquevendaspro.com.br/cadastro)
 
 ## Relatório do mês para saber se a loja está lucrando
 
@@ -109,4 +109,4 @@ Não. O teste de 7 dias é grátis e não pede cartão de crédito.
 
 Menos tempo procurando peça e mais tempo vendendo. Teste o Estoque Pro por 7 dias, sem cartão, e veja como é ter o estoque da sua loja de autopeças sob controle.
 
-[Criar minha conta e testar grátis](https://estoquevendaspro.com/cadastro)
+[Criar minha conta e testar grátis](https://estoquevendaspro.com.br/cadastro)

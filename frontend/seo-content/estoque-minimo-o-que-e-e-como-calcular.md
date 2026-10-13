@@ -110,7 +110,7 @@ Se o consumo varia muito durante o ano (por exemplo, datas comemorativas), a mé
 
 Calcular o mínimo é só metade do trabalho. A outra metade é lembrar de conferir. No Estoque Pro, você cadastra o estoque mínimo de cada produto e o sistema mostra o alerta de reposição, além de gerar uma lista de compras. Dá para testar por 7 dias grátis, sem cartão.
 
-[Testar o alerta de reposição grátis](https://estoquevendaspro.com/cadastro)
+[Testar o alerta de reposição grátis](https://estoquevendaspro.com.br/cadastro)
 
 ## Quanto comprar quando chegar ao mínimo?
 
@@ -165,4 +165,4 @@ Estoque mínimo é uma ferramenta simples que evita dois problemas ao mesmo temp
 
 Para não depender de memória, deixe o alerta por conta do sistema. Teste o Estoque Pro por 7 dias, sem cartão.
 
-[Começar o teste grátis](https://estoquevendaspro.com/cadastro)
+[Começar o teste grátis](https://estoquevendaspro.com.br/cadastro)

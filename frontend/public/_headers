@@ -10,3 +10,6 @@
 
 /anuncios/*
   Access-Control-Allow-Origin: *
+
+/anuncios/*
+  ! X-Frame-Options

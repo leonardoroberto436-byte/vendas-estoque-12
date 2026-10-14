@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "react-router-dom";
-import { Building2, CheckCircle2, Mail, Store } from "lucide-react";
-import { apiPost } from "@/lib/api";
+import { Building2, CheckCircle2, Flame, Mail, Store } from "lucide-react";
+import { apiGet, apiPost } from "@/lib/api";
 import type { SignupResponse } from "@/lib/types";
 import { errorMessage } from "@/lib/format";
 import { Button } from "@/components/ui/button";
@@ -25,6 +25,24 @@ export default function Signup() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
+  // Oferta Fundador: preço e vagas vêm do servidor (mesma regra que cobra).
+  const { data: pub } = useQuery({
+    queryKey: ["public-plans"],
+    queryFn: () =>
+      apiGet<{
+        trial_days: number;
+        plans: { id: string; label: string; price: number }[];
+        founder_coupon: string;
+        founder_discount: number;
+        founder_slots_left: number;
+      }>("/public/plans"),
+    staleTime: 5 * 60 * 1000,
+  });
+  const inicial = pub?.plans.find((p) => p.id === "INICIAL") ?? pub?.plans[0];
+  const founderPrice =
+    inicial && pub ? (inicial.price * (1 - pub.founder_discount)).toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "";
+  const showFounder = !!pub && pub.founder_slots_left > 0 && !!inicial;
+
   const signup = useMutation({
     mutationFn: () =>
       apiPost<SignupResponse>("/auth/signup", {
@@ -38,6 +56,14 @@ export default function Signup() {
     onSuccess: async (data) => {
       // a conta já nasce liberada e logada: vai direto para o sistema
       setDone(data);
+      // guarda o cupom para já aparecer preenchido na tela de assinatura
+      if (showFounder && pub) {
+        try {
+          localStorage.setItem("ep_cupom", pub.founder_coupon);
+        } catch {
+          /* sem armazenamento: o cupom pode ser digitado na assinatura */
+        }
+      }
       // GA4: conta o cadastro de teste como conversão (sem dados pessoais)
       (window as unknown as { gtag?: (...a: unknown[]) => void }).gtag?.("event", "sign_up", { method: "teste_gratis" });
       // Pixel da Meta: conta o cadastro (sem dados pessoais)
@@ -105,6 +131,25 @@ export default function Signup() {
             </p>
           </div>
         </div>
+
+        {showFounder && (
+          <div
+            className="mb-4 flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900"
+            data-testid="signup-founder-offer"
+          >
+            <Flame className="mt-0.5 size-5 shrink-0 text-amber-600" />
+            <div>
+              <p className="font-bold">
+                Oferta Fundador: {founderPrice}/mês para sempre no plano {inicial!.label}
+              </p>
+              <p className="mt-0.5">
+                Metade do preço, só para as 10 primeiras lojas. Restam{" "}
+                <strong>{pub!.founder_slots_left}</strong> vaga(s). Teste 7 dias grátis, sem cartão. O cupom{" "}
+                <strong>{pub!.founder_coupon}</strong> já fica guardado para quando você assinar.
+              </p>
+            </div>
+          </div>
+        )}
 
         <Card className="animate-rise-in border-slate-200 shadow-sm">
           <CardContent className="p-6">

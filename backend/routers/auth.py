@@ -27,7 +27,7 @@ from lib.billing import BLOCK_MESSAGES, billing_block
 from routers.legal import TERMS_VERSION
 from lib.db import db
 from lib.backups import log_platform_action
-from lib.email import send_org_approved, send_password_reset
+from lib.email import send_org_approved, send_owner_new_signup, send_password_reset
 from lib.subscriptions import days_until
 from lib.password_policy import validate_new_password
 from lib.throttle import clear_throttle, client_ip, throttle
@@ -188,6 +188,12 @@ async def signup(payload: SignupRequest, request: Request, response: Response):
         await send_org_approved(to=email, name=user.name, company=org.name, trial_days=TRIAL_DAYS)
     except HTTPException as exc:  # email outage must not void a valid signup
         logger.warning("Signup email não enviado para %s: %s", email, exc.detail)
+    try:
+        await send_owner_new_signup(
+            company=org.name, name=user.name, email=email, whatsapp=whatsapp, trial_days=TRIAL_DAYS
+        )
+    except Exception as exc:  # aviso ao dono nunca bloqueia o cadastro
+        logger.warning("Aviso de cadastro ao dono não enviado: %s", exc)
 
     # já entra logado: o teste começa na hora
     await create_session(user.id, response)

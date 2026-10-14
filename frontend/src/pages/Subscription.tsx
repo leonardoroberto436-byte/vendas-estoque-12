@@ -73,7 +73,13 @@ export default function Subscription() {
   const queryClient = useQueryClient();
   const [params, setParams] = useSearchParams();
   const returning = params.get("retorno") === "mercadopago";
-  const [coupon, setCoupon] = useState("");
+  const [coupon, setCoupon] = useState(() => {
+    try {
+      return localStorage.getItem("ep_cupom") || "";
+    } catch {
+      return "";
+    }
+  });
   const [payerEmail, setPayerEmail] = useState("");
   const [cancelOpen, setCancelOpen] = useState(false);
   const [changing, setChanging] = useState<PaidPlan | null>(null);

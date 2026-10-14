@@ -355,3 +355,30 @@ async def send_billing_notice(*, to: str, name: str, subject: str, paragraphs: l
         )
     body = f"<p>Olá {escape(name)},</p>" + "".join(f"<p>{escape(p)}</p>" for p in paragraphs) + cta
     return await send_email(to=to, subject=f"{subject} — {EMAIL_FROM_NAME}", html=_wrap(body))
+
+
+async def send_owner_new_signup(
+    *, company: str, name: str, email: str, whatsapp: str, trial_days: int
+) -> str | None:
+    """Aviso ao dono a cada cadastro novo, para ligar no mesmo dia."""
+    to = os.environ.get("OWNER_NOTIFY_EMAIL") or EMAIL_REPLY_TO
+    if not to:
+        return None
+    wa = ""
+    if whatsapp:
+        digits = whatsapp if whatsapp.startswith("55") and len(whatsapp) >= 12 else f"55{whatsapp}"
+        wa = (
+            f'<p style="margin:24px 0"><a href="https://wa.me/{digits}" '
+            f'style="background:#16a34a;color:#ffffff;text-decoration:none;padding:12px 22px;'
+            f'border-radius:8px;font-weight:bold;display:inline-block">Chamar no WhatsApp</a></p>'
+        )
+    body = (
+        f"<p><strong>Novo cadastro de teste grátis</strong></p>"
+        f"<p>Empresa: <strong>{escape(company)}</strong><br>"
+        f"Responsável: {escape(name)}<br>"
+        f"E-mail: {escape(email)}<br>"
+        f"WhatsApp: {escape(whatsapp) if whatsapp else 'não informado'}<br>"
+        f"Teste: {trial_days} dias</p>{wa}"
+        f"<p>Dica: ligar hoje aumenta muito a chance de virar assinatura.</p>"
+    )
+    return await send_email(to=to, subject=f"Novo cadastro: {company}"[:120], html=_wrap(body))

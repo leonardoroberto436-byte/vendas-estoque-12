@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from fastapi.responses import FileResponse
 
 from lib.auth import ROLE_ADMIN, Principal, hash_password, require, trial_expired
-from lib.billing import billing_block, run_billing_daily
+from lib.billing import billing_block, maybe_send_onboarding_help, run_billing_daily
 from lib.backups import (
     BACKUP_DIR,
     KEEP_BACKUPS,
@@ -241,6 +241,23 @@ async def update_organization(
     )
     updated = await db.organizations.find_one({"id": org_id})
     return await _to_view(updated)
+
+
+@router.post("/organizations/{org_id}/onboarding-help")
+async def send_org_onboarding_help(org_id: str, principal: Principal = Depends(_owner)):
+    """Envia agora o e-mail de primeiros passos (uma única vez por empresa)."""
+    org = await db.organizations.find_one({"id": org_id})
+    if not org:
+        raise HTTPException(status_code=404, detail="Empresa não encontrada")
+    sent = await maybe_send_onboarding_help(org, datetime.now(timezone.utc), force=True)
+    if sent:
+        await log_platform_action(
+            actor_email=principal.email,
+            action="EMAIL_PRIMEIROS_PASSOS",
+            target=org.get("name", ""),
+            details=f"para {org.get('owner_email', '')}",
+        )
+    return {"sent": sent, "detail": "E-mail enviado." if sent else "Não enviado: já recebeu, tem produtos ou não está em teste."}
 
 
 @router.post("/organizations/{org_id}/admin-password", response_model=OrgCredentials)

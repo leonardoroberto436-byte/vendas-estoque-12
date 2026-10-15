@@ -278,24 +278,60 @@ async def send_signup_pending(*, to: str, name: str, company: str) -> str | None
     )
 
 
+SUPPORT_WHATSAPP = "".join(ch for ch in os.environ.get("SUPPORT_WHATSAPP", "5519991629460") if ch.isdigit())
+
+
+def _button(href: str, label: str, color: str = "#0d9488") -> str:
+    return (
+        f'<p style="margin:24px 0"><a href="{href}" '
+        f'style="background:{color};color:#ffffff;text-decoration:none;padding:12px 22px;'
+        f'border-radius:8px;font-weight:bold;display:inline-block">{escape(label)}</a></p>'
+    )
+
+
+def _support_block() -> str:
+    if not SUPPORT_WHATSAPP:
+        return ""
+    return _button(f"https://wa.me/{SUPPORT_WHATSAPP}", "Falar com o suporte no WhatsApp", "#16a34a")
+
+
 async def send_org_approved(*, to: str, name: str, company: str, trial_days: int) -> str | None:
+    """Boas-vindas no cadastro: o que fazer primeiro e onde pedir ajuda."""
     base = app_url()
-    cta = ""
-    if base:
-        cta = (
-            f'<p style="margin:28px 0"><a href="{base}/login" '
-            f'style="background:#0d9488;color:#ffffff;text-decoration:none;padding:12px 22px;'
-            f'border-radius:8px;font-weight:bold;display:inline-block">Entrar agora</a></p>'
-        )
+    cta = _button(f"{base}/login", "Entrar agora") if base else ""
     body = (
         f"<p>Olá {escape(name)},</p>"
-        f"<p>A empresa <strong>{escape(company)}</strong> foi liberada no "
-        f"{escape(EMAIL_FROM_NAME)}.</p>"
-        f"<p>Seu período de teste de {trial_days} dias começa agora. Entre com o e-mail e a "
-        f"senha que você cadastrou.</p>{cta}"
+        f"<p>A empresa <strong>{escape(company)}</strong> já está liberada no "
+        f"{escape(EMAIL_FROM_NAME)}. Seu teste grátis de {trial_days} dias começou agora.</p>"
+        f"<p><strong>Primeiros passos:</strong></p>"
+        f"<p>1. Cadastre seus produtos um a um ou importe sua planilha em <em>Produtos → Importar planilha</em>.<br>"
+        f"2. Faça uma venda de teste no Caixa e veja o estoque baixar sozinho.<br>"
+        f"3. No fim do dia, confira o relatório de vendas e lucro.</p>"
+        f"{cta}"
+        f"<p>Não quer digitar tudo? Mande sua lista de produtos do jeito que tiver (planilha, foto do "
+        f"caderno ou nota do fornecedor) no WhatsApp do suporte. A gente deixa a planilha pronta e "
+        f"você só importa.</p>{_support_block()}"
     )
     return await send_email(
-        to=to, subject=f"Acesso liberado — {EMAIL_FROM_NAME}", html=_wrap(body)
+        to=to, subject=f"Bem-vindo ao {EMAIL_FROM_NAME}: seus primeiros passos", html=_wrap(body)
+    )
+
+
+async def send_onboarding_help(*, to: str, name: str, company: str) -> str | None:
+    """Lembrete para quem ainda não cadastrou produtos durante o teste."""
+    base = app_url()
+    cta = _button(f"{base}/produtos", "Cadastrar meus produtos") if base else ""
+    body = (
+        f"<p>Olá {escape(name)},</p>"
+        f"<p>Vi que a conta da <strong>{escape(company)}</strong> no {escape(EMAIL_FROM_NAME)} "
+        f"ainda está sem produtos. É o único passo que falta para começar a vender pelo sistema.</p>"
+        f"<p>Se quiser poupar tempo, mande sua lista do jeito que tiver (planilha, foto do caderno "
+        f"ou nota do fornecedor) no WhatsApp do suporte. A gente deixa a planilha pronta e você "
+        f"importa com um clique.</p>{_support_block()}{cta}"
+        f"<p>Qualquer dúvida, é só responder este e-mail.</p>"
+    )
+    return await send_email(
+        to=to, subject=f"Posso te ajudar a começar no {EMAIL_FROM_NAME}?", html=_wrap(body)
     )
 
 

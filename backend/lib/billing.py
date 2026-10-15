@@ -24,7 +24,7 @@ from datetime import datetime, timedelta, timezone
 
 from lib.backups import log_platform_action
 from lib.db import db
-from lib.email import send_billing_notice
+from lib.email import send_billing_notice, send_onboarding_help
 from models.org import (
     FOUNDER_COUPON,
     FOUNDER_DISCOUNT,
@@ -45,6 +45,7 @@ def grace_days() -> int:
 
 # Avisos por e-mail antes do fim do teste grátis (dias antes).
 TRIAL_WARNING_DAYS = (3, 1)
+ONBOARDING_HELP_AFTER = timedelta(days=2)  # sem produtos depois disso → e-mail de ajuda
 
 BLOCK_TRIAL = "TESTE_ENCERRADO"
 BLOCK_PAYMENT = "PAGAMENTO"
@@ -261,12 +262,47 @@ async def _notify(org: dict, subject: str, paragraphs: list[str]) -> None:
         logger.warning("Aviso de cobrança não enviado para %s: %s", email, exc)
 
 
+# ------------------------------------------------------------- primeiros passos
+ONBOARDING_MARKER = "onboarding-ajuda"
+
+
+async def maybe_send_onboarding_help(org: dict, now: datetime, *, force: bool = False) -> bool:
+    """Uma única vez por empresa: teste ativo, sem produtos, 2+ dias de conta.
+    `force` (só o dono da plataforma) dispensa a espera de 2 dias."""
+    if ONBOARDING_MARKER in set(org.get("reminders_sent") or []):
+        return False
+    if org.get("subscription_status") != "TESTE" or billing_block(org):
+        return False
+    started = _aware(org.get("approved_at") or org.get("created_at"))
+    if not force and (not started or now - started < ONBOARDING_HELP_AFTER):
+        return False
+    if await db.products.count_documents({"org_id": org["id"]}) > 0:
+        return False
+    email = (org.get("owner_email") or "").strip()
+    if not email:
+        return False
+    # marca antes de enviar: nunca manda duas vezes, mesmo com duas rotinas ao mesmo tempo
+    res = await db.organizations.update_one(
+        {"id": org["id"], "reminders_sent": {"$ne": ONBOARDING_MARKER}},
+        {"$addToSet": {"reminders_sent": ONBOARDING_MARKER}},
+    )
+    if not res.modified_count:
+        return False
+    try:
+        await send_onboarding_help(to=email, name=org.get("owner_name", ""), company=org.get("name", ""))
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("E-mail de primeiros passos não enviado para %s: %s", email, exc)
+        await db.organizations.update_one({"id": org["id"]}, {"$pull": {"reminders_sent": ONBOARDING_MARKER}})
+        return False
+    return True
+
+
 # ---------------------------------------------------------------- rotina diária
 async def run_billing_daily() -> dict:
     """Suspende após a tolerância, avisa antes, encerra cancelamentos vencidos e
     avisa o fim do teste grátis. Idempotente: pode rodar mais de uma vez por dia."""
     now = _now()
-    suspended = warned = closed = trial_warned = 0
+    suspended = warned = closed = trial_warned = onboarding = 0
     orgs = await db.organizations.find({"status": "APROVADA"}).to_list(5000)
     for org in orgs:
         billing = org.get("billing") or {}
@@ -319,6 +355,8 @@ async def run_billing_daily() -> dict:
         if org.get("subscription_status") == "TESTE":
             ends = _aware(org.get("trial_ends_at"))
             left = (ends - now) if ends else None
+            if await maybe_send_onboarding_help(org, now):
+                onboarding += 1
             for days in TRIAL_WARNING_DAYS:
                 if left is None or not (timedelta(days=days - 1) < left <= timedelta(days=days)):
                     continue
@@ -326,6 +364,11 @@ async def run_billing_daily() -> dict:
                 if marker in sent:
                     continue
                 when = "amanhã" if days == 1 else f"em {days} dias"
+                founder_line = (
+                    [f"Use o cupom {FOUNDER_COUPON} e pague 50% a menos, para sempre. Vale só para as primeiras empresas."]
+                    if await founder_slots_left() > 0
+                    else []
+                )
                 await _notify(
                     org,
                     f"Seu teste grátis termina {when}",
@@ -333,6 +376,7 @@ async def run_billing_daily() -> dict:
                         f"O período de teste da empresa {org.get('name', '')} termina {when}.",
                         "Escolha um plano em Minha assinatura para continuar usando sem interrupção. "
                         "Seus produtos e vendas continuam guardados.",
+                        *founder_line,
                     ],
                 )
                 await db.organizations.update_one(
@@ -341,7 +385,7 @@ async def run_billing_daily() -> dict:
                 trial_warned += 1
 
     # suspended-for-payment companies are no longer APROVADA — nothing else to do
-    result = {"suspended": suspended, "warned": warned, "closed": closed, "trial_warned": trial_warned}
+    result = {"suspended": suspended, "warned": warned, "closed": closed, "trial_warned": trial_warned, "onboarding": onboarding}
     logger.info("Rotina de cobrança: %s", result)
     return result
 

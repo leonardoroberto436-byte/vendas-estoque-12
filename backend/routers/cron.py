@@ -7,10 +7,12 @@ The handler acks immediately and does the real work in the background.
 import hmac
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 
 from fastapi import APIRouter, BackgroundTasks, Header, HTTPException
 
 from lib.backups import run_backup
+from lib.db import db
 from lib.billing import run_billing_daily
 from lib.subscriptions import run_due_reminders
 
@@ -53,6 +55,7 @@ async def nightly_backup(
     background: BackgroundTasks,
     authorization: str | None = Header(default=None),
     x_webhook_id: str | None = Header(default=None),
+    if_missing: bool = False,
 ):
     # Cron endpoints must ack 2xx immediately; enqueue/background the actual work.
     _check_auth(authorization)
@@ -61,5 +64,10 @@ async def nightly_backup(
         return {"status": "duplicate", "run_id": run_id}
     if run_id:
         _seen_runs.add(run_id)
+    if if_missing:
+        # repescagem: só roda se não houver backup OK nas últimas 20 horas
+        since = datetime.now(timezone.utc) - timedelta(hours=20)
+        if await db.backups.find_one({"status": "OK", "created_at": {"$gte": since}}):
+            return {"status": "skipped", "reason": "já existe backup recente"}
     background.add_task(run_backup)
     return {"status": "accepted", "run_id": run_id}

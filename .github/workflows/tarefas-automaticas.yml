@@ -6,12 +6,14 @@ name: Tarefas automaticas
 
 on:
   schedule:
-    - cron: "0 9 * * *"   # 06:00 em Brasília — backup diário
-    - cron: "0 15 * * *"  # 12:00 em Brasília — avisos de vencimento
+    # Fora da hora cheia: o GitHub atrasa ou pula agendamentos em :00 quando está sobrecarregado.
+    - cron: "41 8 * * *"   # 05:41 em Brasília — backup diário
+    - cron: "41 11 * * *"  # 08:41 em Brasília — repescagem: só faz backup se o das 05:41 não aconteceu
+    - cron: "7 15 * * *"   # 12:07 em Brasília — avisos de vencimento
   workflow_dispatch:
     inputs:
       tarefa:
-        description: "backup ou avisos"
+        description: "backup, backup-se-faltar ou avisos"
         required: true
         default: backup
 
@@ -28,13 +30,16 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             T="${{ github.event.inputs.tarefa }}"
-          elif [ "${{ github.event.schedule }}" = "0 9 * * *" ]; then
+          elif [ "${{ github.event.schedule }}" = "41 8 * * *" ]; then
             T=backup
+          elif [ "${{ github.event.schedule }}" = "41 11 * * *" ]; then
+            T=backup-se-faltar
           else
             T=avisos
           fi
           case "$T" in
             backup) echo "path=/api/cron/backup" >> "$GITHUB_OUTPUT" ;;
+            backup-se-faltar) echo "path=/api/cron/backup?if_missing=1" >> "$GITHUB_OUTPUT" ;;
             avisos) echo "path=/api/cron/subscription-reminders" >> "$GITHUB_OUTPUT" ;;
             *) echo "tarefa inválida"; exit 1 ;;
           esac

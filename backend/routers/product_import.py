@@ -15,6 +15,7 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import StreamingResponse
+from pymongo import UpdateOne
 from pydantic import BaseModel
 
 from lib.auth import Principal, require, scoped
@@ -25,8 +26,9 @@ from models.org import PLAN_LABELS
 
 router = APIRouter(prefix="/products/import", tags=["products"])
 
-MAX_ROWS = 5000
-MAX_BYTES = 5 * 1024 * 1024
+MAX_ROWS = 50000
+MAX_BYTES = 25 * 1024 * 1024
+BATCH = 1000
 PREVIEW_ROWS = 200
 DEFAULT_CATEGORY = "Geral"
 
@@ -171,7 +173,7 @@ async def download_template(principal: Principal = Depends(require("products:wri
         ["SKU já cadastrado: o produto é ATUALIZADO só nas colunas preenchidas."],
         ["Estoque: em produto existente, a quantidade vira o novo estoque (fica registrado como ajuste)."],
         ["Preços podem ter vírgula (12,50) ou ponto (12.50). Categoria vazia vira 'Geral'."],
-        ["Apague as 2 linhas de exemplo antes de importar. Até 5.000 linhas por arquivo."],
+        ["Apague as 2 linhas de exemplo antes de importar. Até 50.000 linhas por arquivo."],
     ):
         help_ws.append(line)
     help_ws.column_dimensions["A"].width = 110
@@ -194,7 +196,7 @@ async def import_products(
 ):
     content = await file.read(MAX_BYTES + 1)
     if len(content) > MAX_BYTES:
-        raise HTTPException(status_code=413, detail="Arquivo grande demais (máximo 5 MB).")
+        raise HTTPException(status_code=413, detail="Arquivo grande demais (máximo 25 MB).")
     if not content:
         raise HTTPException(status_code=400, detail="Arquivo vazio.")
 
@@ -326,6 +328,9 @@ async def import_products(
 
     now = datetime.now(timezone.utc)
     reason = "Importação de planilha"
+    new_products: list[dict] = []
+    product_updates: list[UpdateOne] = []
+    movements: list[dict] = []
     for action, data, current in plans:
         if action == "SEM_MUDANCA":
             continue
@@ -341,9 +346,9 @@ async def import_products(
                 min_stock=data.get("min_stock", 0),
                 barcode=data.get("barcode", ""),
             )
-            await db.products.insert_one(product.model_dump())
+            new_products.append(product.model_dump())
             if product.current_stock > 0:
-                await db.stock_movements.insert_one(
+                movements.append(
                     StockMovement(
                         org_id=principal.org_id, product_id=product.id, product_name=product.name,
                         sku=product.sku, type="ENTRADA", quantity=product.current_stock,
@@ -354,10 +359,10 @@ async def import_products(
             continue
         changes = {k: v for k, v in data.items() if k != "sku"}
         changes["updated_at"] = now
-        await db.products.update_one(scoped(principal, {"id": current["id"]}), {"$set": changes})
+        product_updates.append(UpdateOne(scoped(principal, {"id": current["id"]}), {"$set": changes}))
         if "current_stock" in changes:
             delta = changes["current_stock"] - int(current.get("current_stock", 0))
-            await db.stock_movements.insert_one(
+            movements.append(
                 StockMovement(
                     org_id=principal.org_id, product_id=current["id"],
                     product_name=changes.get("name", current["name"]), sku=current["sku"],
@@ -366,4 +371,11 @@ async def import_products(
                     reason=reason, operator_name=principal.name,
                 ).model_dump()
             )
+    # grava em lotes: 50 mil linhas uma a uma estouraria o tempo da requisição
+    for i in range(0, len(new_products), BATCH):
+        await db.products.insert_many(new_products[i : i + BATCH], ordered=False)
+    for i in range(0, len(product_updates), BATCH):
+        await db.products.bulk_write(product_updates[i : i + BATCH], ordered=False)
+    for i in range(0, len(movements), BATCH):
+        await db.stock_movements.insert_many(movements[i : i + BATCH], ordered=False)
     return result(applied=True)

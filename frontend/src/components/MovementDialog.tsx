@@ -50,6 +50,22 @@ export default function MovementDialog({
   const [type, setType] = useState<MovementType>(defaultType);
   const [quantity, setQuantity] = useState("1");
   const [reason, setReason] = useState("");
+  const [find, setFind] = useState("");
+  // 40 mil itens num menu travam a tela: mostra só os que batem com a busca
+  const options = useMemo(() => {
+    const term = find.trim().toLowerCase();
+    const hits = products
+      .filter(
+        (p) =>
+          !term ||
+          p.name.toLowerCase().includes(term) ||
+          p.sku.toLowerCase().includes(term) ||
+          (p.barcode ?? "").includes(term),
+      )
+      .slice(0, 100);
+    const chosen = products.find((p) => p.id === productId);
+    return chosen && !hits.includes(chosen) ? [chosen, ...hits] : hits;
+  }, [products, find, productId]);
 
   useEffect(() => {
     if (open) {
@@ -57,6 +73,7 @@ export default function MovementDialog({
       setType(defaultType);
       setQuantity("1");
       setReason("");
+      setFind("");
     }
   }, [open, presetProductId, defaultType]);
 
@@ -94,6 +111,14 @@ export default function MovementDialog({
         <div className="space-y-4">
           <div className="space-y-1.5">
             <Label>Produto</Label>
+            {products.length > 100 && (
+              <Input
+                placeholder="Buscar por nome, SKU ou código de barras"
+                value={find}
+                onChange={(e) => setFind(e.target.value)}
+                data-testid={`${prefix}-product-search`}
+              />
+            )}
             <Select value={productId} onValueChange={(value: string) => setProductId(value)}>
               <SelectTrigger data-testid={`${prefix}-product-select`}>
                 <SelectValue placeholder="Selecione o produto">
@@ -103,7 +128,7 @@ export default function MovementDialog({
                 </SelectValue>
               </SelectTrigger>
               <SelectContent>
-                {products.map((product) => (
+                {options.map((product) => (
                   <SelectItem key={product.id} value={product.id}>
                     {product.name} — {product.current_stock} un.
                   </SelectItem>

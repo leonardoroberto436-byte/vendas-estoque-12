@@ -36,6 +36,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BRAND_NAME } from "@/lib/brand";
+import ShowMore, { PAGE_SIZE } from "@/components/ShowMore";
 
 const PAYMENTS: PaymentMethod[] = ["DINHEIRO", "PIX", "CARTAO_DEBITO", "CARTAO_CREDITO"];
 
@@ -44,6 +45,7 @@ export default function PointOfSale() {
   const [search, setSearch] = useState("");
   const searchRef = useRef<HTMLInputElement>(null);
   const [category, setCategory] = useState("TODAS");
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [cart, setCart] = useState<Record<string, number>>({});
   const [payment, setPayment] = useState<PaymentMethod>("DINHEIRO");
   const [discount, setDiscount] = useState("0");
@@ -173,7 +175,10 @@ export default function PointOfSale() {
                 ref={searchRef}
                 autoFocus
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => {
+                  setSearch(event.target.value);
+                  setLimit(PAGE_SIZE);
+                }}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
@@ -185,7 +190,10 @@ export default function PointOfSale() {
                 data-testid="pos-search-input"
               />
             </div>
-            <Select value={category} onValueChange={(value: string) => setCategory(value)}>
+            <Select value={category} onValueChange={(value: string) => {
+              setCategory(value);
+              setLimit(PAGE_SIZE);
+            }}>
               <SelectTrigger className="sm:w-56" data-testid="pos-category-filter">
                 <SelectValue>
                   {(value) => (value === "TODAS" ? "Todas as categorias" : String(value))}
@@ -202,7 +210,7 @@ export default function PointOfSale() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {visible.map((product) => {
+            {visible.slice(0, limit).map((product) => {
               const status = stockStatus(product);
               const inCart = cart[product.id] ?? 0;
               return (
@@ -260,6 +268,7 @@ export default function PointOfSale() {
                 Nenhum produto encontrado para este filtro.
               </p>
             )}
+            <ShowMore shown={Math.min(limit, visible.length)} total={visible.length} onMore={() => setLimit(limit + PAGE_SIZE)} />
           </div>
         </div>
 

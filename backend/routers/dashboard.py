@@ -50,7 +50,26 @@ async def dashboard_stats(
     today_start = _day_start(today_local)
     window_start = _day_start(today_local - timedelta(days=period - 1))
 
-    products = await db.products.find(scoped(principal)).to_list(5000)
+    # totais calculados no banco: funciona com qualquer quantidade de produtos
+    base = scoped(principal)
+    low_filter = {**base, "$expr": {"$lte": ["$current_stock", "$min_stock"]}}
+    agg = await db.products.aggregate([
+        {"$match": base},
+        {"$group": {
+            "_id": None,
+            "count": {"$sum": 1},
+            "out": {"$sum": {"$cond": [{"$eq": ["$current_stock", 0]}, 1, 0]}},
+            "value": {"$sum": {"$multiply": [
+                {"$ifNull": ["$cost_price", 0]},
+                {"$ifNull": ["$current_stock", 0]},
+            ]}},
+        }},
+    ]).to_list(1)
+    totals = agg[0] if agg else {"count": 0, "out": 0, "value": 0.0}
+    low_count = await db.products.count_documents(low_filter)
+    low_docs = (
+        await db.products.find(low_filter).sort([("current_stock", 1), ("name", 1)]).to_list(20)
+    )
     sales = await db.sales.find(scoped(principal, {"created_at": {"$gte": window_start}})).to_list(
         20000
     )
@@ -75,16 +94,12 @@ async def dashboard_stats(
             current_stock=p["current_stock"],
             min_stock=p["min_stock"],
         )
-        for p in products
-        if p["current_stock"] <= p["min_stock"]
+        for p in low_docs
     ]
-    low.sort(key=lambda i: (i.current_stock, i.name))
     if not await low_stock_alerts_enabled(principal.org_id):
-        low = []  # a empresa desligou os alertas de estoque
+        low, low_count = [], 0  # a empresa desligou os alertas de estoque
 
-    inventory_value = round(
-        sum(float(p["cost_price"]) * int(p["current_stock"]) for p in products), 2
-    )
+    inventory_value = round(float(totals["value"]), 2)
 
     buckets: dict[str, dict] = {}
     for offset in range(period - 1, -1, -1):
@@ -149,10 +164,10 @@ async def dashboard_stats(
         today_sales_count=len(today_sales),
         today_revenue=today_revenue,
         today_profit=today_profit,
-        low_stock_count=len(low),
-        out_of_stock_count=sum(1 for p in products if p["current_stock"] == 0),
+        low_stock_count=low_count,
+        out_of_stock_count=int(totals["out"]),
         inventory_value=inventory_value,
-        product_count=len(products),
+        product_count=int(totals["count"]),
         period_days=period,
         period_revenue=period_revenue,
         period_profit=period_profit,

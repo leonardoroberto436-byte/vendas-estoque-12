@@ -15,6 +15,7 @@ import {
 import { useCurrentUser } from "@/lib/useCurrentUser";
 import AppShell from "@/components/AppShell";
 import ImportProductsDialog from "@/components/ImportProductsDialog";
+import ShowMore, { PAGE_SIZE } from "@/components/ShowMore";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,7 @@ export default function Products() {
   // the backend enforces this, the UI just avoids offering a blocked action.
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState("");
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
@@ -188,7 +190,10 @@ export default function Products() {
         <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400" />
         <Input
           value={search}
-          onChange={(event) => setSearch(event.target.value)}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setLimit(PAGE_SIZE);
+          }}
           placeholder="Buscar por nome, SKU ou código de barras…"
           className="pl-9"
           data-testid="product-search-input"
@@ -211,7 +216,7 @@ export default function Products() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {visible.map((product) => {
+              {visible.slice(0, limit).map((product) => {
                 const status = stockStatus(product);
                 return (
                   <TableRow key={product.id} data-testid={`product-table-row-${product.id}`}>
@@ -286,6 +291,7 @@ export default function Products() {
               )}
             </TableBody>
           </Table>
+          <ShowMore shown={Math.min(limit, visible.length)} total={visible.length} onMore={() => setLimit(limit + PAGE_SIZE)} />
         </CardContent>
       </Card>
 

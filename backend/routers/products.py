@@ -61,7 +61,7 @@ async def list_products(
         ]
     if category and category != "TODAS":
         extra["category"] = category
-    docs = await db.products.find(scoped(principal, extra)).sort("name", 1).to_list(1000)
+    docs = await db.products.find(scoped(principal, extra)).sort("name", 1).to_list(None)
     return [Product(**aware(doc)) for doc in docs]
 
 

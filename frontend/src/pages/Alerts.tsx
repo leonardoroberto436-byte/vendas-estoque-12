@@ -11,6 +11,7 @@ import MovementDialog from "@/components/MovementDialog";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import ShowMore, { PAGE_SIZE } from "@/components/ShowMore";
 
 export default function Alerts() {
   const [restockId, setRestockId] = useState<string | null>(null);
@@ -42,6 +43,7 @@ export default function Alerts() {
     refetchOnWindowFocus: false,
   });
   const products = isError ? [] : (data ?? []);
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const alerts = alertsOn
     ? products
         .filter((product) => product.current_stock <= product.min_stock)
@@ -93,7 +95,7 @@ export default function Alerts() {
       )}
 
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" data-testid="alerts-list">
-        {alerts.map((product) => {
+        {alerts.slice(0, limit).map((product) => {
           const status = stockStatus(product);
           return (
             <Card
@@ -143,6 +145,7 @@ export default function Alerts() {
             </Card>
           );
         })}
+        <ShowMore shown={Math.min(limit, alerts.length)} total={alerts.length} onMore={() => setLimit(limit + PAGE_SIZE)} />
         {alertsOn && alerts.length === 0 && (
           <Card className="col-span-full border-emerald-200 bg-emerald-50/50 shadow-xs">
             <CardContent className="p-8 text-center text-sm font-medium text-emerald-800">

@@ -138,7 +138,7 @@ async def export_company_data(principal: Principal = Depends(require("users:mana
     from openpyxl import Workbook
     from openpyxl.styles import Font
 
-    products = await db.products.find(scoped(principal)).sort("name", 1).to_list(50000)
+    products = await db.products.find(scoped(principal)).sort("name", 1).to_list(None)
     sales = await db.sales.find(scoped(principal)).sort("created_at", 1).to_list(200000)
     returns = await db.returns.find(scoped(principal)).sort("created_at", 1).to_list(200000)
     movements = await db.stock_movements.find(scoped(principal)).sort("created_at", 1).to_list(500000)

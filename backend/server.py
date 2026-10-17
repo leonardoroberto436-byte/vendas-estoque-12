@@ -125,6 +125,11 @@ async def require_proxy_secret(request, call_next):
     return await call_next(request)
 
 
+from starlette.middleware.gzip import GZipMiddleware  # noqa: E402
+
+# lista de produtos grande (40 mil itens) chega comprimida ao navegador
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
